@@ -400,6 +400,16 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=12, max_length=200)
 
 
+class RegistrationRequest(BaseModel):
+    organization_name: str = Field(min_length=1, max_length=120)
+    username: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=12, max_length=200)
+
+
+class RegistrationSetting(BaseModel):
+    allow_registration: bool
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
     password: str = Field(min_length=12, max_length=200)

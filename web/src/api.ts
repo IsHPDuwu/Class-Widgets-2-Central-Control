@@ -1,6 +1,7 @@
 export type Organization = { id: string; name: string }
 export type Principal = { id: string; username: string; role: string; platform_admin: boolean; organization_ids: string[] }
 export type AdminUser = { id: string; username: string; role: string; disabled: boolean; organization_ids: string[] }
+export type RegistrationSetting = { allow_registration: boolean }
 
 export type Group = {
   id: string
@@ -175,8 +176,12 @@ function patch<T>(path: string, body: JsonBody) {
 
 export const api = {
   login: (username: string, password: string) => authRequest<{ token: string; expires_at: string; role: string }>('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  registrationStatus: () => authRequest<RegistrationSetting>('/registration-status'),
+  register: (body: JsonBody) => authRequest<{ username: string; organization_id: string }>('/register', { method: 'POST', body: JSON.stringify(body) }),
   me: () => protectedAuthRequest<Principal>('/me'),
   users: () => protectedAuthRequest<AdminUser[]>('/users'),
+  registrationSetting: () => request<RegistrationSetting>('/settings/registration'),
+  updateRegistrationSetting: (allowRegistration: boolean) => request<RegistrationSetting>('/settings/registration', { method: 'PUT', body: JSON.stringify({ allow_registration: allowRegistration }) }),
   createUser: (body: JsonBody) => protectedAuthRequest<AdminUser>('/users', { method: 'POST', body: JSON.stringify(body) }),
   assignUserOrganizations: (id: string, organizationIds: string[]) => protectedAuthRequest<{ id: string; organization_ids: string[] }>(`/users/${id}/organizations`, { method: 'PUT', body: JSON.stringify({ organization_ids: organizationIds }) }),
   organizations: () => request<Organization[]>('/organizations'),

@@ -18,7 +18,7 @@ import {
   ShieldLock24Regular,
   WeatherMoon24Regular,
 } from '@fluentui/react-icons'
-import { Button, Select, Tab, TabList } from '@fluentui/react-components'
+import { Button, Checkbox, Select, Tab, TabList } from '@fluentui/react-components'
 import { api, getAdminKey, getSessionToken, setAdminKey, setSessionToken, type AdminUser, type CommandRecord, type Device, type DiagnosticDetail, type Group, type Organization, type Principal } from './api'
 import { ScheduleWorkspace } from './ScheduleWorkspace'
 import { ConfigWorkspace } from './ConfigWorkspace'
@@ -82,7 +82,7 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
   const [principal, setPrincipal] = useState<Principal | null>(null)
 
   const refresh = useCallback(async () => {
-    if (!getAdminKey() && !getSessionToken()) return
+    if (!getAdminKey() && !getSessionToken()) { setConnected(false); return }
     setLoading(true)
     try {
       const [nextPrincipal, nextOrganizations] = await Promise.all([api.me(), api.organizations()])
@@ -107,6 +107,8 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
       setConnected(true)
       setNotice(null)
     } catch (error) {
+      setAdminKey('')
+      setSessionToken('')
       setConnected(false)
       setPrincipal(null)
       setNotice({ tone: 'error', message: error instanceof Error ? error.message : '无法连接服务' })
@@ -151,6 +153,7 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
     ? [...NAV_ITEMS, { id: 'tenants' as const, label: '租户管理', icon: PeopleTeam24Regular }]
     : NAV_ITEMS
 
+  if (!connected) return <LoginPage adminKey={adminKey} onAdminKeyChange={updateAdminKey} username={username} password={password} onUsernameChange={setUsername} onPasswordChange={setPassword} onAdminLogin={connect} onTenantLogin={login} loading={loading} onComplete={complete} />
   return <div className="app-shell">
     <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
       <div className="brand"><div className="brand-mark"><img src={centralControlIcon} alt="集控" /></div><div><strong>集控</strong><span>Class Widgets</span></div></div>
@@ -166,7 +169,6 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
       </header>
       <div className="page">
         <section className="page-heading"><div><h1>{title}</h1><p>{subtitle}</p></div></section>
-        {!connected && <ConnectionPanel value={adminKey} onChange={updateAdminKey} onSubmit={connect} username={username} password={password} onUsernameChange={setUsername} onPasswordChange={setPassword} onLogin={login} loading={loading} />}
         {notice && <div className={`notice ${notice.tone}`}>{notice.tone === 'success' ? <CheckmarkCircle20Filled /> : <DismissCircle20Filled />}<span>{notice.message}</span></div>}
           {view === 'overview' && <Overview devices={devices} groups={groups} organizations={organizations} onComplete={complete} />}
         {view === 'devices' && <DevicesView devices={devices} groups={groups} onComplete={complete} />}
@@ -182,9 +184,21 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
   </div>
 }
 
-function ConnectionPanel({ value, onChange, onSubmit, username, password, onUsernameChange, onPasswordChange, onLogin, loading }: { value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; username: string; password: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onLogin: (event: FormEvent) => void; loading: boolean }) {
+function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameChange, onPasswordChange, onAdminLogin, onTenantLogin, loading, onComplete }: { adminKey: string; onAdminKeyChange: (value: string) => void; username: string; password: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onAdminLogin: (event: FormEvent) => void; onTenantLogin: (event: FormEvent) => void; loading: boolean; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
+  const [mode, setMode] = useState<'tenant' | 'admin'>('tenant')
+  const [registering, setRegistering] = useState(false)
+  const [registrationAllowed, setRegistrationAllowed] = useState(false)
+  const [organizationName, setOrganizationName] = useState('')
+  useEffect(() => { api.registrationStatus().then((result) => setRegistrationAllowed(result.allow_registration)).catch(() => setRegistrationAllowed(false)) }, [])
+  async function register(event: FormEvent) { event.preventDefault(); try { await api.register({ organization_name: organizationName.trim(), username: username.trim(), password }); setRegistering(false); onComplete('注册成功，请登录'); setOrganizationName('') } catch (error) { onComplete(error instanceof Error ? error.message : '注册失败', 'error') } }
+  return <div className="login-page"><div className="login-banner"><img src={centralControlIcon} alt="Class Widgets" /><div><strong>Class Widgets</strong><span>集中管理平台</span></div><p>统一管理设备、课表、策略与自动化任务。</p></div><div className="login-card"><div className="login-heading"><h1>{registering ? '创建租户账号' : '登录集控'}</h1><p>{mode === 'admin' ? '平台管理员使用管理密钥进入后台。' : registering ? '注册后将创建一个新的租户及管理员账号。' : '租户成员使用账号和密码登录。'}</p></div>{!registering && <div className="segmented login-segment"><button type="button" className={mode === 'tenant' ? 'selected' : ''} onClick={() => setMode('tenant')}>租户登录</button><button type="button" className={mode === 'admin' ? 'selected' : ''} onClick={() => setMode('admin')}>管理员登录</button></div>}{registering ? <form onSubmit={register}><label>租户名称<input value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" /></label><label>管理员用户名<input value={username} onChange={(event) => onUsernameChange(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} placeholder="至少 12 个字符" /></label><Button appearance="primary" type="submit" disabled={!organizationName.trim() || !username.trim() || password.length < 12 || loading}>注册</Button><Button appearance="subtle" type="button" onClick={() => setRegistering(false)}>返回登录</Button></form> : mode === 'admin' ? <form onSubmit={onAdminLogin}><label>管理员密钥<input type="password" value={adminKey} onChange={(event) => onAdminKeyChange(event.target.value)} placeholder="输入平台管理员密钥" /></label><Button appearance="primary" type="submit" disabled={!adminKey.trim() || loading}>管理员登录</Button></form> : <form onSubmit={onTenantLogin}><label>用户名<input value={username} onChange={(event) => onUsernameChange(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} /></label><Button appearance="primary" type="submit" disabled={!username.trim() || password.length < 12 || loading}>登录</Button>{registrationAllowed && <Button appearance="subtle" type="button" onClick={() => setRegistering(true)}>注册新租户</Button>}</form>}</div></div>
+}
+
+ function ConnectionPanel_UNUSED_REMOVED({ value, onChange, onSubmit, username, password, onUsernameChange, onPasswordChange, onLogin, loading }: { value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; username: string; password: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onLogin: (event: FormEvent) => void; loading: boolean }) {
   return <div className="connection-panel"><Key24Regular /><div><strong>连接管理服务</strong><span>平台管理员可使用密钥；租户成员使用账号登录。</span></div><form onSubmit={onSubmit}><input type="password" aria-label="管理员密钥" placeholder="输入平台管理员密钥" value={value} onChange={(event) => onChange(event.target.value)} /><button className="primary" disabled={!value.trim() || loading}>密钥连接</button></form><form onSubmit={onLogin}><input aria-label="用户名" placeholder="用户名" value={username} onChange={(event) => onUsernameChange(event.target.value)} /><input type="password" aria-label="密码" placeholder="密码" value={password} onChange={(event) => onPasswordChange(event.target.value)} /><button className="primary" disabled={!username.trim() || password.length < 12 || loading}>账号登录</button></form></div>
 }
+
+void ConnectionPanel_UNUSED_REMOVED
 
 function TenantManagement({ organizations, onComplete }: { organizations: Organization[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -193,13 +207,15 @@ function TenantManagement({ organizations, onComplete }: { organizations: Organi
   const [password, setPassword] = useState('')
   const [role, setRole] = useState('operator')
   const [selected, setSelected] = useState<string[]>([])
+  const [allowRegistration, setAllowRegistration] = useState(false)
+  useEffect(() => { void api.registrationSetting().then((setting) => setAllowRegistration(setting.allow_registration)).catch(() => undefined) }, [])
   const load = useCallback(() => api.users().then(setUsers).catch((error) => onComplete(error instanceof Error ? error.message : '加载成员失败', 'error')), [onComplete])
   useEffect(() => { void load() }, [load])
   async function createTenant(event: FormEvent) { event.preventDefault(); try { await api.createOrganization(tenantName.trim()); setTenantName(''); onComplete('租户已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建租户失败', 'error') } }
   async function createMember(event: FormEvent) { event.preventDefault(); try { await api.createUser({ username: username.trim(), password, role, organization_ids: selected }); setUsername(''); setPassword(''); setSelected([]); onComplete('租户成员已创建'); load() } catch (error) { onComplete(error instanceof Error ? error.message : '创建成员失败', 'error') } }
   async function assign(user: AdminUser, ids: string[]) { try { await api.assignUserOrganizations(user.id, ids); onComplete(`“${user.username}”的租户范围已更新`); load() } catch (error) { onComplete(error instanceof Error ? error.message : '更新授权失败', 'error') } }
   function organizationChecks(ids: string[], change: (value: string[]) => void) { return <div className="checks">{organizations.map((organization) => <label key={organization.id}><input type="checkbox" checked={ids.includes(organization.id)} onChange={(event) => change(event.target.checked ? [...ids, organization.id] : ids.filter((id) => id !== organization.id))} />{organization.name}</label>)}</div> }
-  return <div className="tenant-layout"><section className="form-section"><h2>新建租户</h2><p>每个租户拥有独立的分组、设备、课表、策略、命令和日志。</p><form onSubmit={createTenant}><label>租户名称<input value={tenantName} onChange={(event) => setTenantName(event.target.value)} placeholder="例如：示范中学" /></label><button className="primary" disabled={!tenantName.trim()}><Add24Regular />创建租户</button></form></section><section className="form-section"><h2>新建成员</h2><p>成员只能访问明确分配的租户。</p><form onSubmit={createMember}><label>用户名<input value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 12 个字符" /></label><label>角色<select value={role} onChange={(event) => setRole(event.target.value)}><option value="viewer">只读</option><option value="operator">操作员</option><option value="admin">租户管理员</option></select></label><fieldset><legend>可访问租户</legend>{organizationChecks(selected, setSelected)}</fieldset><button className="primary" disabled={!username.trim() || password.length < 12}><PeopleTeam24Regular />创建成员</button></form></section><section className="data-section tenant-members"><div className="section-heading"><h2>成员与租户授权</h2><span>{users.length} 名成员</span></div>{users.length === 0 && <div className="empty-command">暂无租户成员</div>}{users.map((user) => <TenantMemberRow key={user.id} user={user} organizations={organizations} onAssign={assign} />)}</section></div>
+  return <div className="tenant-layout"><section className="form-section"><h2>总设置</h2><p>控制是否允许未登录用户在登录页注册新租户。</p><Checkbox label="允许公开注册" checked={allowRegistration} onChange={(_, data) => { const enabled = Boolean(data.checked); setAllowRegistration(enabled); void api.updateRegistrationSetting(enabled).then(() => onComplete(enabled ? '已允许公开注册' : '已关闭公开注册')).catch((error) => onComplete(error instanceof Error ? error.message : '保存设置失败', 'error')) }} /></section><section className="form-section"><h2>新建租户</h2><p>每个租户拥有独立的分组、设备、课表、策略、命令和日志。</p><form onSubmit={createTenant}><label>租户名称<input value={tenantName} onChange={(event) => setTenantName(event.target.value)} placeholder="例如：示范中学" /></label><button className="primary" disabled={!tenantName.trim()}><Add24Regular />创建租户</button></form></section><section className="form-section"><h2>新建成员</h2><p>成员只能访问明确分配的租户。</p><form onSubmit={createMember}><label>用户名<input value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 12 个字符" /></label><label>角色<select value={role} onChange={(event) => setRole(event.target.value)}><option value="viewer">只读</option><option value="operator">操作员</option><option value="admin">租户管理员</option></select></label><fieldset><legend>可访问租户</legend>{organizationChecks(selected, setSelected)}</fieldset><button className="primary" disabled={!username.trim() || password.length < 12}><PeopleTeam24Regular />创建成员</button></form></section><section className="data-section tenant-members"><div className="section-heading"><h2>成员与租户授权</h2><span>{users.length} 名成员</span></div>{users.length === 0 && <div className="empty-command">暂无租户成员</div>}{users.map((user) => <TenantMemberRow key={user.id} user={user} organizations={organizations} onAssign={assign} />)}</section></div>
 }
 
 function TenantMemberRow({ user, organizations, onAssign }: { user: AdminUser; organizations: Organization[]; onAssign: (user: AdminUser, ids: string[]) => void }) {

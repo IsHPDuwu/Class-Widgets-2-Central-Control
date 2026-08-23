@@ -66,6 +66,19 @@ h2 { margin-bottom: 0; font-size: 16px; line-height: 1.3; }
 .connection-panel form { display: flex; min-width: 0; gap: 8px; }
 .connection-panel form input { min-width: 0; }
 .connection-panel form .primary { flex: 0 0 auto; white-space: nowrap; }
+.login-page { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(380px, 520px); min-height: 100vh; background: var(--page-bg); }
+.login-banner { display: flex; flex-direction: column; justify-content: center; padding: 12vw; color: white; background: linear-gradient(135deg, #003544, #006278 55%, #1692ae); }
+.login-banner img { width: 72px; height: 72px; margin-bottom: 24px; border-radius: 18px; box-shadow: 0 12px 30px rgba(0,0,0,.2); }
+.login-banner strong { font-size: clamp(30px, 4vw, 54px); letter-spacing: -.04em; }
+.login-banner span { display: block; margin-top: 6px; color: #c8edff; font-size: 18px; }
+.login-banner p { max-width: 390px; margin-top: 42px; color: #e8f7ff; font-size: 15px; line-height: 1.8; }
+.login-card { align-self: center; width: min(100% - 48px, 420px); margin: auto; padding: 38px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow8); }
+.login-heading { margin-bottom: 24px; }
+.login-heading h1 { margin-bottom: 8px; font-size: 28px; }
+.login-heading p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.login-card form { display: grid; gap: 16px; }
+.login-card form .fui-Button { min-height: 38px; }
+.login-segment { width: 100%; margin-bottom: 22px; }
 .notice { display: flex; align-items: center; gap: 8px; min-height: 40px; margin-bottom: 18px; padding: 8px 12px; border: 1px solid; border-radius: 5px; font-size: 13px; }
 .notice.success { color: var(--colorPaletteGreenForeground1); border-color: var(--colorPaletteGreenBorderActive); background: var(--colorPaletteGreenBackground1); }
 .notice.error { color: var(--danger); border-color: var(--colorPaletteRedBorderActive); background: var(--colorPaletteRedBackground1); }
@@ -291,6 +304,13 @@ legend { margin-bottom: 8px; color: var(--colorNeutralForeground2); font-size: 1
 }
 
 @media (max-width: 760px) {
+  .login-page { display: block; }
+  .login-banner { min-height: 220px; padding: 42px 28px; }
+  .login-banner img { width: 48px; height: 48px; margin-bottom: 14px; }
+  .login-banner strong { font-size: 32px; }
+  .login-banner span { font-size: 14px; }
+  .login-banner p { margin: 18px 0 0; font-size: 13px; }
+  .login-card { width: calc(100% - 32px); margin: 24px auto; padding: 26px 22px; }
   .app-shell { display: block; }
   .sidebar { transform: translateX(-100%); transition: transform .18s ease; box-shadow: 8px 0 24px rgba(0,0,0,.22); }
   .sidebar.open { transform: translateX(0); }

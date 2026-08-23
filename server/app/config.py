@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     poll_interval_seconds: int = Field(default=10, ge=5, le=300)
     device_online_timeout_seconds: int = Field(default=45, ge=15, le=3600)
     automation_poll_interval_seconds: int = Field(default=2, ge=1, le=60)
+    allow_registration: bool = False
 
 
 @lru_cache

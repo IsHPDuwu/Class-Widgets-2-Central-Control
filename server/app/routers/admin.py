@@ -21,6 +21,7 @@ from ..models import (
     PairingCode,
     PolicyRevision,
     ScheduleRevision,
+    SystemSetting,
     utc_iso,
     utc_now,
 )
@@ -36,10 +37,38 @@ from ..schemas import (
     ResourceClone,
     SchedulePublish,
     ScheduleUpdate,
+    RegistrationSetting,
 )
 from ..security import generate_secret, hash_secret
 
 router = APIRouter(tags=["admin"])
+
+
+@router.get("/settings/registration")
+def get_registration_setting(
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict[str, bool]:
+    require_platform_admin(principal)
+    setting = db.get(SystemSetting, "allow_registration")
+    return {"allow_registration": bool(setting and setting.value.get("enabled", False))}
+
+
+@router.put("/settings/registration")
+def update_registration_setting(
+    payload: RegistrationSetting,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict[str, bool]:
+    require_platform_admin(principal)
+    setting = db.get(SystemSetting, "allow_registration")
+    if setting is None:
+        setting = SystemSetting(key="allow_registration")
+        db.add(setting)
+    setting.value = {"enabled": payload.allow_registration}
+    setting.updated_at = utc_now()
+    db.commit()
+    return {"allow_registration": payload.allow_registration}
 
 
 def _require_group_access(group_id: str, principal: dict, db: Session) -> DeviceGroup:

@@ -13,13 +13,24 @@ from ..models import (
     AuditLog,
     Organization,
     OrganizationMembership,
+    SystemSetting,
     utc_iso,
     utc_now,
 )
-from ..schemas import LoginRequest, UserCreate, UserOrganizationAssignment
+from ..schemas import LoginRequest, RegistrationRequest, UserCreate, UserOrganizationAssignment
 from ..security import generate_secret, hash_password, hash_secret, verify_password
 
 router = APIRouter(tags=["authentication"])
+
+
+def _registration_enabled(db: Session) -> bool:
+    setting = db.get(SystemSetting, "allow_registration")
+    return bool(setting.value.get("enabled", False)) if setting else False
+
+
+@router.get("/registration-status")
+def registration_status(db: Annotated[Session, Depends(get_db)]) -> dict[str, bool]:
+    return {"allow_registration": _registration_enabled(db)}
 
 
 def _validate_organization_ids(organization_ids: set[str], db: Session) -> list[str]:
@@ -48,6 +59,26 @@ def login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dic
     db.add(AuditLog(actor=user.username, action="login", resource="session"))
     db.commit()
     return {"token": token, "expires_at": utc_iso(expires_at), "role": user.role}
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+def register(payload: RegistrationRequest, db: Annotated[Session, Depends(get_db)]) -> dict:
+    if not _registration_enabled(db):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="registration is disabled")
+    if db.scalar(select(AdminUser).where(AdminUser.username == payload.username)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="username exists")
+    if db.scalar(select(Organization).where(Organization.name == payload.organization_name)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="organization exists")
+    organization = Organization(name=payload.organization_name)
+    db.add(organization)
+    db.flush()
+    user = AdminUser(username=payload.username, password_hash=hash_password(payload.password), role="admin")
+    db.add(user)
+    db.flush()
+    db.add(OrganizationMembership(user_id=user.id, organization_id=organization.id))
+    db.add(AuditLog(actor=payload.username, action="register", resource=f"organization:{organization.name}"))
+    db.commit()
+    return {"username": user.username, "organization_id": organization.id}
 
 
 @router.get("/me")
