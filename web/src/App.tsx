@@ -17,6 +17,7 @@ import {
   PeopleTeam24Regular,
   ShieldLock24Regular,
   WeatherMoon24Regular,
+  SignOut24Regular,
 } from '@fluentui/react-icons'
 import { Button, Checkbox, Select, Tab, TabList } from '@fluentui/react-components'
 import { api, getAdminKey, getSessionToken, setAdminKey, setSessionToken, type AdminUser, type CommandRecord, type Device, type DiagnosticDetail, type Group, type Organization, type Principal } from './api'
@@ -148,6 +149,15 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
     if (tone === 'success') void refresh()
   }
 
+  async function logout() {
+    try { if (getSessionToken()) await api.logout() } catch { /* 本地凭据仍需清理 */ }
+    setSessionToken('')
+    setAdminKey('')
+    updateAdminKey('')
+    setPrincipal(null)
+    setConnected(false)
+  }
+
   const [title, subtitle] = VIEW_TITLES[view]
   const navItems = principal?.platform_admin
     ? [...NAV_ITEMS, { id: 'tenants' as const, label: '租户管理', icon: PeopleTeam24Regular }]
@@ -166,6 +176,7 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
         <label className="toolbar-select"><Organization24Regular /><Select aria-label="当前组织" value={organizationId} onChange={(_, data) => setOrganizationId(data.value)}>{organizations.length === 0 && <option value="">未选择组织</option>}{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</Select></label>
         <label className="toolbar-select theme-picker"><WeatherMoon24Regular /><Select aria-label="颜色模式" value={themeMode} onChange={(_, data) => onThemeModeChange(data.value as ThemeMode)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select></label>
         <Button appearance="subtle" icon={<ArrowClockwise24Regular />} aria-label="刷新" disabled={loading} onClick={() => void refresh()} />
+        <Button appearance="subtle" icon={<SignOut24Regular />} aria-label="退出登录" title="退出登录" onClick={() => void logout()} />
       </header>
       <div className="page">
         <section className="page-heading"><div><h1>{title}</h1><p>{subtitle}</p></div></section>

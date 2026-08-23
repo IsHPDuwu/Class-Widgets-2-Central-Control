@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,7 @@ router = APIRouter(tags=["authentication"])
 
 
 def _registration_enabled(db: Session) -> bool:
+    SystemSetting.__table__.create(bind=db.get_bind(), checkfirst=True)
     setting = db.get(SystemSetting, "allow_registration")
     return bool(setting.value.get("enabled", False)) if setting else False
 
@@ -59,6 +60,22 @@ def login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> dic
     db.add(AuditLog(actor=user.username, action="login", resource="session"))
     db.commit()
     return {"token": token, "expires_at": utc_iso(expires_at), "role": user.role}
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    request: Request,
+    principal: Annotated[dict, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        db.execute(
+            delete(AdminSession).where(
+                AdminSession.token_hash == hash_secret(authorization.removeprefix("Bearer ").strip())
+            )
+        )
+        db.commit()
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)

@@ -176,6 +176,7 @@ function patch<T>(path: string, body: JsonBody) {
 
 export const api = {
   login: (username: string, password: string) => authRequest<{ token: string; expires_at: string; role: string }>('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  logout: () => protectedAuthRequest<void>('/logout', { method: 'POST' }),
   registrationStatus: () => authRequest<RegistrationSetting>('/registration-status'),
   register: (body: JsonBody) => authRequest<{ username: string; organization_id: string }>('/register', { method: 'POST', body: JSON.stringify(body) }),
   me: () => protectedAuthRequest<Principal>('/me'),
