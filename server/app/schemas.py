@@ -201,6 +201,11 @@ class RuntimeStatePayload(BaseModel):
     remaining_seconds: int | None = Field(default=None, ge=0)
 
 
+class ScheduleSnapshotUpload(BaseModel):
+    request_id: str = Field(min_length=1, max_length=36)
+    schedule: SchedulePayload
+
+
 class SyncRequest(BaseModel):
     protocol_version: Literal[1] = 1
     cursor: int = Field(default=0, ge=0)
@@ -212,6 +217,7 @@ class SyncRequest(BaseModel):
     runtime: RuntimeStatePayload = Field(default_factory=RuntimeStatePayload)
     acknowledgements: list[CommandAckPayload] = Field(default_factory=list, max_length=100)
     last_error: str = Field(default="", max_length=1000)
+    schedule_snapshot: ScheduleSnapshotUpload | None = None
 
 
 class RevisionPayload(BaseModel):
@@ -276,6 +282,9 @@ class CommandCreate(BaseModel):
         "trigger_action",
         "apply_config",
         "switch_schedule",
+        "request_schedule_snapshot",
+        "apply_class_swap",
+        "restore_class_swap",
     ]
     group_id: str | None = None
     device_id: str | None = None
@@ -301,6 +310,33 @@ class CommandCreate(BaseModel):
             overrides = self.payload.get("overrides")
             if not isinstance(overrides, dict) or not overrides:
                 raise ValueError("apply_config requires non-empty overrides")
+        return self
+
+
+class ClassSwapPrepare(BaseModel):
+    group_id: str
+
+
+class ClassSwapCreate(BaseModel):
+    group_id: str
+    request_id: str = Field(min_length=1, max_length=36)
+    device_ids: list[str] = Field(default_factory=list, min_length=1)
+    operation: Literal["apply_today", "swap", "replace"]
+    day_of_week: Annotated[int, Field(ge=1, le=7)]
+    week_of_cycle: Annotated[int, Field(ge=1, le=52)]
+    entry_id_a: str = Field(default="", max_length=160)
+    entry_id_b: str = Field(default="", max_length=160)
+    entry_id: str = Field(default="", max_length=160)
+    subject_id: str = Field(default="", max_length=160)
+
+    @model_validator(mode="after")
+    def validate_operation(self) -> ClassSwapCreate:
+        if len(self.device_ids) != len(set(self.device_ids)):
+            raise ValueError("device_ids must be unique")
+        if self.operation == "swap" and (not self.entry_id_a or not self.entry_id_b):
+            raise ValueError("swap requires entry_id_a and entry_id_b")
+        if self.operation == "replace" and (not self.entry_id or not self.subject_id):
+            raise ValueError("replace requires entry_id and subject_id")
         return self
 
 

@@ -156,6 +156,128 @@ def test_schedule_policy_and_command_sync(client, admin_headers):
     assert ack.json()["commands"] == []
 
 
+def test_client_schedule_snapshot_and_class_swap_event(client, admin_headers):
+    organization, group, code = bootstrap(client, admin_headers)
+    paired = pair(client, code).json()
+    device_headers = {"Authorization": f"Bearer {paired['device_token']}"}
+
+    prepared = client.post(
+        "/api/v1/admin/class-swaps/prepare",
+        headers=admin_headers,
+        json={"group_id": group["id"]},
+    )
+    assert prepared.status_code == 201
+    request_id = prepared.json()["request_id"]
+
+    command_sync = client.post(
+        "/api/v1/device/sync",
+        headers=device_headers,
+        json={"protocol_version": 1, "cursor": 0},
+    ).json()
+    request_command = next(
+        command for command in command_sync["commands"]
+        if command["type"] == "request_schedule_snapshot"
+    )
+    schedule = {
+        "meta": {
+            "id": "client-meta",
+            "version": 1,
+            "maxWeekCycle": 2,
+            "startDate": "2026-08-24",
+        },
+        "subjects": [
+            {"id": "math", "name": "数学", "isLocalClassroom": True},
+            {"id": "english", "name": "英语", "isLocalClassroom": True},
+        ],
+        "days": [
+            {
+                "id": "monday-odd",
+                "dayOfWeek": [1],
+                "weeks": [1],
+                "entries": [
+                    {
+                        "id": "entry-1",
+                        "type": "class",
+                        "startTime": "08:00",
+                        "endTime": "08:40",
+                        "subjectId": "math",
+                    },
+                    {
+                        "id": "entry-2",
+                        "type": "class",
+                        "startTime": "08:50",
+                        "endTime": "09:30",
+                        "subjectId": "english",
+                    },
+                ],
+            }
+        ],
+        "overrides": [],
+    }
+    uploaded = client.post(
+        "/api/v1/device/sync",
+        headers=device_headers,
+        json={
+            "protocol_version": 1,
+            "cursor": command_sync["cursor"],
+            "schedule_snapshot": {"request_id": request_id, "schedule": schedule},
+            "acknowledgements": [
+                {"command_id": request_command["command_id"], "status": "succeeded"}
+            ],
+        },
+    )
+    assert uploaded.status_code == 200
+
+    preparation = client.get(
+        f"/api/v1/admin/class-swaps/preparations/{request_id}?group_id={group['id']}",
+        headers=admin_headers,
+    ).json()
+    assert preparation["devices"][0]["ready"] is True
+
+    snapshot = client.get(
+        f"/api/v1/admin/class-swaps/snapshots/{paired['device_id']}?request_id={request_id}",
+        headers=admin_headers,
+    ).json()
+    assert snapshot["schedule"]["meta"]["maxWeekCycle"] == 2
+
+    created = client.post(
+        "/api/v1/admin/class-swaps",
+        headers=admin_headers,
+        json={
+            "group_id": group["id"],
+            "request_id": request_id,
+            "device_ids": [paired["device_id"]],
+            "operation": "swap",
+            "day_of_week": 1,
+            "week_of_cycle": 1,
+            "entry_id_a": "entry-1",
+            "entry_id_b": "entry-2",
+        },
+    )
+    assert created.status_code == 201
+    session_id = created.json()["id"]
+
+    event_sync = client.post(
+        "/api/v1/device/sync",
+        headers=device_headers,
+        json={"protocol_version": 1, "cursor": command_sync["cursor"]},
+    ).json()
+    event = next(
+        command for command in event_sync["commands"]
+        if command["type"] == "apply_class_swap"
+    )
+    assert event["payload"]["entry_id_a"] == "entry-1"
+    assert event["payload"]["entry_id_b"] == "entry-2"
+
+    restored = client.post(
+        f"/api/v1/admin/class-swaps/{session_id}/restore",
+        headers=admin_headers,
+        json={},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["status"] == "restoring"
+
+
 def test_policy_accepts_all_valid_config_paths(client, admin_headers):
     organization, group, _ = bootstrap(client, admin_headers)
     response = client.post(

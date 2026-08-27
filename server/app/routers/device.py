@@ -1,5 +1,6 @@
 from datetime import UTC
 from hashlib import sha256
+import json
 from typing import Annotated
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from ..models import (
     Command,
     CommandAcknowledgement,
     Device,
+    DeviceScheduleSnapshot,
     DeviceGroup,
     DiagnosticReport,
     PairingCode,
@@ -120,6 +122,42 @@ def sync_device(
     device.last_cursor = max(device.last_cursor, payload.cursor)
     device.last_error = payload.last_error
     device.last_seen = now
+
+    if payload.schedule_snapshot is not None:
+        snapshot_data = payload.schedule_snapshot.schedule.model_dump(mode="json")
+        encoded = json.dumps(snapshot_data, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        if len(encoded) > 2_000_000:
+            raise HTTPException(status_code=413, detail="schedule snapshot is too large")
+        request_command = db.scalar(
+            select(Command).where(
+                Command.device_id == device.id,
+                Command.type == "request_schedule_snapshot",
+            ).order_by(Command.cursor.desc())
+        )
+        if (
+            request_command is None
+            or request_command.payload.get("request_id") != payload.schedule_snapshot.request_id
+        ):
+            raise HTTPException(status_code=409, detail="stale schedule snapshot request")
+        snapshot = db.get(DeviceScheduleSnapshot, device.id)
+        if snapshot is None:
+            snapshot = DeviceScheduleSnapshot(device_id=device.id)
+            db.add(snapshot)
+        snapshot.request_id = payload.schedule_snapshot.request_id
+        normalized_snapshot = {
+            **snapshot_data,
+            "overrides": [
+                override
+                for override in snapshot_data.get("overrides", [])
+                if not str(override.get("id", "")).startswith("swap_cc_")
+            ],
+        }
+        normalized_encoded = json.dumps(
+            normalized_snapshot, ensure_ascii=False, sort_keys=True
+        ).encode("utf-8")
+        snapshot.schedule_hash = sha256(normalized_encoded).hexdigest()
+        snapshot.data = snapshot_data
+        snapshot.uploaded_at = now
 
     for ack in payload.acknowledgements:
         command = db.get(Command, ack.command_id)

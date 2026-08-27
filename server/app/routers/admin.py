@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,7 +14,9 @@ from ..dependencies import (
 from ..models import (
     Command,
     CommandAcknowledgement,
+    ClassSwapSession,
     Device,
+    DeviceScheduleSnapshot,
     DeviceGroup,
     DiagnosticReport,
     Organization,
@@ -26,6 +28,8 @@ from ..models import (
     utc_now,
 )
 from ..schemas import (
+    ClassSwapCreate,
+    ClassSwapPrepare,
     CommandCreate,
     GroupAssignment,
     GroupCreate,
@@ -42,6 +46,30 @@ from ..schemas import (
 from ..security import generate_secret, hash_secret
 
 router = APIRouter(tags=["admin"])
+
+
+def _next_command_cursor(db: Session) -> int:
+    return (db.scalar(select(func.max(Command.cursor))) or 0) + 1
+
+
+def _create_device_command(
+    db: Session,
+    *,
+    device_id: str,
+    command_type: str,
+    payload: dict,
+    expires_in_seconds: int = 3600,
+) -> Command:
+    command = Command(
+        cursor=_next_command_cursor(db),
+        device_id=device_id,
+        type=command_type,
+        payload=payload,
+        expires_at=utc_now() + timedelta(seconds=expires_in_seconds),
+    )
+    db.add(command)
+    db.flush()
+    return command
 
 
 @router.get("/settings/registration")
@@ -167,6 +195,226 @@ def list_groups(
         }
         for item in groups
     ]
+
+
+@router.post("/class-swaps/prepare", status_code=status.HTTP_201_CREATED)
+def prepare_class_swap(
+    payload: ClassSwapPrepare,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    group = _require_group_access(payload.group_id, principal, db)
+    request_id = generate_secret(27)[:36]
+    devices = db.scalars(
+        select(Device).where(Device.group_id == group.id, Device.revoked.is_(False))
+    ).all()
+    if not devices:
+        raise HTTPException(status_code=409, detail="group has no active devices")
+    for device in devices:
+        _create_device_command(
+            db,
+            device_id=device.id,
+            command_type="request_schedule_snapshot",
+            payload={"request_id": request_id},
+            expires_in_seconds=300,
+        )
+    db.commit()
+    return {"request_id": request_id, "device_ids": [device.id for device in devices]}
+
+
+@router.get("/class-swaps/preparations/{request_id}")
+def get_class_swap_preparation(
+    request_id: str,
+    group_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    group = _require_group_access(group_id, principal, db)
+    devices = db.scalars(
+        select(Device).where(Device.group_id == group.id, Device.revoked.is_(False))
+    ).all()
+    result = []
+    for device in devices:
+        snapshot = db.get(DeviceScheduleSnapshot, device.id)
+        ready = snapshot is not None and snapshot.request_id == request_id
+        result.append(
+            {
+                "device_id": device.id,
+                "device_name": device.name,
+                "ready": ready,
+                "schedule_hash": snapshot.schedule_hash if ready else "",
+                "uploaded_at": utc_iso(snapshot.uploaded_at) if ready else None,
+            }
+        )
+    return {"request_id": request_id, "group_id": group.id, "devices": result}
+
+
+@router.get("/class-swaps/snapshots/{device_id}")
+def get_class_swap_snapshot(
+    device_id: str,
+    request_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    device = _require_device_access(device_id, principal, db)
+    snapshot = db.get(DeviceScheduleSnapshot, device.id)
+    if snapshot is None or snapshot.request_id != request_id:
+        raise HTTPException(status_code=404, detail="fresh schedule snapshot not found")
+    return {
+        "device_id": device.id,
+        "request_id": snapshot.request_id,
+        "schedule_hash": snapshot.schedule_hash,
+        "schedule": snapshot.data,
+        "uploaded_at": utc_iso(snapshot.uploaded_at),
+    }
+
+
+@router.post("/class-swaps", status_code=status.HTTP_201_CREATED)
+def create_class_swap(
+    payload: ClassSwapCreate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    group = _require_group_access(payload.group_id, principal, db)
+    devices = db.scalars(select(Device).where(Device.id.in_(payload.device_ids))).all()
+    if len(devices) != len(payload.device_ids) or any(
+        device.group_id != group.id or device.revoked for device in devices
+    ):
+        raise HTTPException(status_code=400, detail="invalid target devices")
+
+    required_entries = {
+        value for value in (payload.entry_id_a, payload.entry_id_b, payload.entry_id) if value
+    }
+    hashes: dict[str, str] = {}
+    for device in devices:
+        snapshot = db.get(DeviceScheduleSnapshot, device.id)
+        if snapshot is None or snapshot.request_id != payload.request_id:
+            raise HTTPException(
+                status_code=409, detail=f"device {device.name} has no fresh schedule snapshot"
+            )
+        entry_ids = {
+            entry["id"]
+            for day in snapshot.data.get("days", [])
+            for entry in day.get("entries", [])
+        }
+        subject_ids = {subject["id"] for subject in snapshot.data.get("subjects", [])}
+        if not required_entries.issubset(entry_ids):
+            raise HTTPException(
+                status_code=409, detail=f"device {device.name} has incompatible entry ids"
+            )
+        if payload.subject_id and payload.subject_id not in subject_ids:
+            raise HTTPException(
+                status_code=409, detail=f"device {device.name} has incompatible subject id"
+            )
+        max_cycle = int(snapshot.data.get("meta", {}).get("maxWeekCycle", 1))
+        if payload.week_of_cycle > max_cycle:
+            raise HTTPException(
+                status_code=409, detail=f"device {device.name} does not have that cycle week"
+            )
+        hashes[device.id] = snapshot.schedule_hash
+
+    today = datetime.now().date()
+    session = db.scalar(
+        select(ClassSwapSession).where(
+            ClassSwapSession.group_id == group.id,
+            ClassSwapSession.effective_date == today,
+            ClassSwapSession.status == "active",
+        )
+    )
+    if session is None:
+        session = ClassSwapSession(
+            organization_id=group.organization_id,
+            group_id=group.id,
+            effective_date=today,
+        )
+        db.add(session)
+        db.flush()
+    command_payload = payload.model_dump(exclude={"group_id", "request_id", "device_ids"})
+    command_payload["session_id"] = session.id
+    command_ids = []
+    for device in devices:
+        command = _create_device_command(
+            db,
+            device_id=device.id,
+            command_type="apply_class_swap",
+            payload={**command_payload, "schedule_hash": hashes[device.id]},
+            expires_in_seconds=3600,
+        )
+        command_ids.append(command.id)
+    session.operations = [
+        *session.operations,
+        {
+            **command_payload,
+            "request_id": payload.request_id,
+            "device_ids": payload.device_ids,
+            "command_ids": command_ids,
+            "created_at": utc_iso(utc_now()),
+        },
+    ]
+    db.commit()
+    return {"id": session.id, "command_ids": command_ids}
+
+
+@router.get("/class-swaps")
+def list_class_swaps(
+    organization_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> list[dict]:
+    require_organization_access(organization_id, principal, db)
+    sessions = db.scalars(
+        select(ClassSwapSession)
+        .where(ClassSwapSession.organization_id == organization_id)
+        .order_by(ClassSwapSession.created_at.desc())
+        .limit(30)
+    ).all()
+    return [
+        {
+            "id": item.id,
+            "group_id": item.group_id,
+            "effective_date": item.effective_date.isoformat(),
+            "status": item.status,
+            "operations": item.operations,
+            "created_at": utc_iso(item.created_at),
+            "restored_at": utc_iso(item.restored_at) if item.restored_at else None,
+        }
+        for item in sessions
+    ]
+
+
+@router.post("/class-swaps/{session_id}/restore")
+def restore_class_swap(
+    session_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    session = db.get(ClassSwapSession, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="class swap session not found")
+    require_organization_access(session.organization_id, principal, db)
+    if session.status != "active":
+        return {"id": session.id, "status": session.status, "command_ids": []}
+    device_ids = sorted(
+        {
+            device_id
+            for operation in session.operations
+            for device_id in operation.get("device_ids", [])
+        }
+    )
+    command_ids = []
+    for device_id in device_ids:
+        command = _create_device_command(
+            db,
+            device_id=device_id,
+            command_type="restore_class_swap",
+            payload={"session_id": session.id},
+            expires_in_seconds=86400,
+        )
+        command_ids.append(command.id)
+    session.status = "restoring"
+    session.restored_at = utc_now()
+    db.commit()
+    return {"id": session.id, "status": session.status, "command_ids": command_ids}
 
 
 @router.patch("/devices/{device_id}/group")

@@ -12,6 +12,7 @@ from ..database import SessionLocal
 from ..models import (
     AutomationRule,
     AutomationRun,
+    ClassSwapSession,
     Command,
     Device,
     DeviceGroup,
@@ -135,6 +136,31 @@ def _claim_targets(db, rule: AutomationRule, targets: list[Device], scheduled_fo
 def run_cycle() -> None:
     now = utc_now()
     with SessionLocal() as db:
+        local_today = now.astimezone().date()
+        expired_swaps = db.scalars(
+            select(ClassSwapSession).where(
+                ClassSwapSession.status == "active",
+                ClassSwapSession.effective_date < local_today,
+            )
+        ).all()
+        for session in expired_swaps:
+            device_ids = {
+                device_id
+                for operation in session.operations
+                for device_id in operation.get("device_ids", [])
+            }
+            for device_id in device_ids:
+                device = db.get(Device, device_id)
+                if device and not device.revoked:
+                    _create_command(
+                        db,
+                        device,
+                        "restore_class_swap",
+                        {"session_id": session.id},
+                        now + timedelta(days=1),
+                    )
+            session.status = "expired"
+            session.restored_at = now
         rules = db.scalars(select(AutomationRule).where(AutomationRule.enabled.is_(True))).all()
         for rule in rules:
             targets = _targets(db, rule)

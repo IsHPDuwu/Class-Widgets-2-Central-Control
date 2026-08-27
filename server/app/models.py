@@ -98,6 +98,36 @@ class Device(Base):
 
     group: Mapped[DeviceGroup] = relationship(back_populates="devices")
     acknowledgements: Mapped[list[CommandAcknowledgement]] = relationship(back_populates="device")
+    schedule_snapshot: Mapped[DeviceScheduleSnapshot | None] = relationship(
+        back_populates="device", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class DeviceScheduleSnapshot(Base):
+    __tablename__ = "device_schedule_snapshots"
+
+    device_id: Mapped[str] = mapped_column(
+        ForeignKey("devices.id"), primary_key=True
+    )
+    request_id: Mapped[str] = mapped_column(String(36), index=True)
+    schedule_hash: Mapped[str] = mapped_column(String(64))
+    data: Mapped[dict[str, Any]] = mapped_column(JSON)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    device: Mapped[Device] = relationship(back_populates="schedule_snapshot")
+
+
+class ClassSwapSession(Base):
+    __tablename__ = "class_swap_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    group_id: Mapped[str] = mapped_column(ForeignKey("device_groups.id"), index=True)
+    effective_date: Mapped[date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="active", index=True)
+    operations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    restored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AutomationRule(Base):

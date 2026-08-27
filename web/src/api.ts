@@ -52,6 +52,30 @@ export type ScheduleRecord = {
   created_at: string
 }
 
+export type ClassSwapPreparation = {
+  request_id: string
+  group_id: string
+  devices: Array<{ device_id: string; device_name: string; ready: boolean; schedule_hash: string; uploaded_at: string | null }>
+}
+
+export type ClassSwapSnapshot = {
+  device_id: string
+  request_id: string
+  schedule_hash: string
+  schedule: Record<string, unknown>
+  uploaded_at: string
+}
+
+export type ClassSwapSession = {
+  id: string
+  group_id: string
+  effective_date: string
+  status: string
+  operations: Array<Record<string, unknown>>
+  created_at: string
+  restored_at: string | null
+}
+
 export type PolicyRecord = {
   id: string
   name: string
@@ -208,6 +232,12 @@ export const api = {
   clonePolicy: (id: string, name: string) => post<{ id: string; revision: number }>(`/policies/${id}/clone`, { name }),
   assignSchedule: (id: string, groupIds: string[]) => put(`/schedules/${id}/groups`, { group_ids: groupIds }),
   assignPolicy: (id: string, groupIds: string[]) => put(`/policies/${id}/groups`, { group_ids: groupIds }),
+  prepareClassSwap: (groupId: string) => post<{ request_id: string; device_ids: string[] }>('/class-swaps/prepare', { group_id: groupId }),
+  classSwapPreparation: (requestId: string, groupId: string) => request<ClassSwapPreparation>(`/class-swaps/preparations/${encodeURIComponent(requestId)}?group_id=${encodeURIComponent(groupId)}`),
+  classSwapSnapshot: (deviceId: string, requestId: string) => request<ClassSwapSnapshot>(`/class-swaps/snapshots/${encodeURIComponent(deviceId)}?request_id=${encodeURIComponent(requestId)}`),
+  classSwaps: (organizationId: string) => request<ClassSwapSession[]>(`/class-swaps?organization_id=${encodeURIComponent(organizationId)}`),
+  createClassSwap: (body: JsonBody) => post<{ id: string; command_ids: string[] }>('/class-swaps', body),
+  restoreClassSwap: (id: string) => post<{ id: string; status: string; command_ids: string[] }>(`/class-swaps/${id}/restore`, {}),
   moveDevice: (id: string, groupId: string) => patch(`/devices/${id}/group`, { group_id: groupId }),
   deleteDevice: (id: string) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
   automations: (organizationId: string) => request<AutomationRule[]>(`/automations?organization_id=${encodeURIComponent(organizationId)}`),
