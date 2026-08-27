@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..dependencies import require_admin, require_organization_access
+from ..dependencies import require_admin, require_organization_access, require_permission
 from ..models import AutomationRule, AutomationRun, Device, DeviceGroup, PolicyRevision, ScheduleRevision, utc_iso, utc_now
 from ..schemas import AutomationRuleCreate, AutomationRuleUpdate
 from ..services.automation import run_cycle
@@ -15,12 +15,13 @@ from ..services.automation import run_cycle
 router = APIRouter(tags=["automation"])
 
 
-def _target(payload, db: Session, principal: dict):
+def _target(payload, db: Session, principal: dict, permission: str):
     if payload.group_id:
         target = db.get(DeviceGroup, payload.group_id)
         if target is None:
             raise HTTPException(404, "group not found")
         require_organization_access(target.organization_id, principal, db)
+        require_permission(principal, permission, organization_id=target.organization_id, group_id=target.id)
         if target.organization_id != payload.organization_id:
             raise HTTPException(400, "group belongs to another organization")
     else:
@@ -28,6 +29,7 @@ def _target(payload, db: Session, principal: dict):
         if target is None:
             raise HTTPException(404, "device not found")
         require_organization_access(target.group.organization_id, principal, db)
+        require_permission(principal, permission, organization_id=target.group.organization_id, group_id=target.group_id, device_id=target.id)
         if target.group.organization_id != payload.organization_id:
             raise HTTPException(400, "device belongs to another organization")
 
@@ -87,6 +89,7 @@ def list_automations(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.automations.view", organization_id=organization_id)
     return [_serialize(rule) for rule in db.scalars(select(AutomationRule).where(AutomationRule.organization_id == organization_id).order_by(AutomationRule.created_at.desc())).all()]
 
 
@@ -97,7 +100,8 @@ def create_automation(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     require_organization_access(payload.organization_id, principal, db)
-    _target(payload, db, principal)
+    require_permission(principal, "organization.automations.create", organization_id=payload.organization_id)
+    _target(payload, db, principal, "organization.automations.create")
     rule = AutomationRule()
     _save(rule, payload, db)
     db.add(rule)
@@ -117,9 +121,10 @@ def update_automation(
     if rule is None:
         raise HTTPException(404, "automation not found")
     require_organization_access(rule.organization_id, principal, db)
+    require_permission(principal, "organization.automations.update", organization_id=rule.organization_id, group_id=rule.group_id, device_id=rule.device_id)
     if payload.organization_id != rule.organization_id:
         raise HTTPException(400, "organization cannot be changed")
-    _target(payload, db, principal)
+    _target(payload, db, principal, "organization.automations.update")
     _save(rule, payload, db)
     db.commit()
     return _serialize(rule)
@@ -135,6 +140,7 @@ def delete_automation(
     if rule is None:
         raise HTTPException(404, "automation not found")
     require_organization_access(rule.organization_id, principal, db)
+    require_permission(principal, "organization.automations.delete", organization_id=rule.organization_id, group_id=rule.group_id, device_id=rule.device_id)
     db.query(AutomationRun).filter(AutomationRun.rule_id == rule.id).delete(synchronize_session=False)
     db.delete(rule)
     db.commit()
@@ -151,6 +157,7 @@ def set_automation_enabled(
     if rule is None:
         raise HTTPException(404, "automation not found")
     require_organization_access(rule.organization_id, principal, db)
+    require_permission(principal, "organization.automations.update", organization_id=rule.organization_id, group_id=rule.group_id, device_id=rule.device_id)
     rule.enabled = enabled
     rule.updated_at = utc_now()
     db.commit()
@@ -167,6 +174,7 @@ def list_automation_runs(
     if rule is None:
         raise HTTPException(404, "automation not found")
     require_organization_access(rule.organization_id, principal, db)
+    require_permission(principal, "organization.automations.view", organization_id=rule.organization_id, group_id=rule.group_id, device_id=rule.device_id)
     return [{
         "id": run.id, "device_id": run.device_id,
         "scheduled_for": utc_iso(run.scheduled_for), "execute_after": utc_iso(run.execute_after),
@@ -185,5 +193,6 @@ def run_automation_now(
     if rule is None:
         raise HTTPException(404, "automation not found")
     require_organization_access(rule.organization_id, principal, db)
+    require_permission(principal, "organization.automations.execute", organization_id=rule.organization_id, group_id=rule.group_id, device_id=rule.device_id)
     run_cycle()
     return {"status": "queued"}

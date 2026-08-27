@@ -1,7 +1,11 @@
 export type Organization = { id: string; name: string }
-export type Principal = { id: string; username: string; role: string; platform_admin: boolean; organization_ids: string[] }
-export type AdminUser = { id: string; username: string; role: string; disabled: boolean; organization_ids: string[] }
+export type Principal = { id: string; username: string; role: string; platform_admin: boolean; organization_ids: string[]; authorization_status: 'pending' | 'active'; permissions: string[] }
+export type AdminUser = { id: string; username: string; role: string; disabled: boolean; organization_ids: string[]; display_name: string; email: string; authorization_status: 'pending' | 'active'; has_password: boolean }
 export type RegistrationSetting = { allow_registration: boolean }
+export type OAuthProviderPublic = { key: string; name: string }
+export type OAuthProvider = OAuthProviderPublic & { id: string; issuer_url: string; client_id: string; has_client_secret: boolean; scopes: string; enabled: boolean; allow_signup: boolean; created_at: string; updated_at: string }
+export type PermissionGrant = { permission_key: string; organization_id: string | null; resource_type: 'platform' | 'organization' | 'group' | 'device'; resource_id: string | null }
+export type PermissionCatalog = { platform: Array<{ key: string; label: string }>; organization: Array<{ key: string; label: string; resource_types: string[]; actions: Array<{ key: string; action: string; label: string }> }> }
 
 export type Group = {
   id: string
@@ -203,11 +207,20 @@ function patch<T>(path: string, body: JsonBody) {
 
 export const api = {
   login: (username: string, password: string) => authRequest<{ token: string; expires_at: string; role: string }>('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  oauthProvidersPublic: () => authRequest<OAuthProviderPublic[]>('/oauth/providers'),
+  exchangeOAuthCode: (code: string) => authRequest<{ token: string }>('/oauth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
   logout: () => protectedAuthRequest<void>('/logout', { method: 'POST' }),
   registrationStatus: () => authRequest<RegistrationSetting>('/registration-status'),
   register: (body: JsonBody) => authRequest<{ username: string; organization_id: string }>('/register', { method: 'POST', body: JSON.stringify(body) }),
   me: () => protectedAuthRequest<Principal>('/me'),
   users: () => protectedAuthRequest<AdminUser[]>('/users'),
+  permissionCatalog: () => protectedAuthRequest<PermissionCatalog>('/permissions/catalog'),
+  userGrants: (id: string) => protectedAuthRequest<{ user_id: string; authorization_status: 'pending' | 'active'; grants: PermissionGrant[] }>(`/users/${id}/grants`),
+  setUserGrants: (id: string, grants: PermissionGrant[], authorizationStatus: 'pending' | 'active') => protectedAuthRequest<{ user_id: string; authorization_status: 'pending' | 'active'; grants: PermissionGrant[] }>(`/users/${id}/grants`, { method: 'PUT', body: JSON.stringify({ grants, authorization_status: authorizationStatus }) }),
+  oauthProviders: () => protectedAuthRequest<OAuthProvider[]>('/oauth/providers/manage'),
+  createOAuthProvider: (body: JsonBody) => protectedAuthRequest<OAuthProvider>('/oauth/providers/manage', { method: 'POST', body: JSON.stringify(body) }),
+  updateOAuthProvider: (id: string, body: JsonBody) => protectedAuthRequest<OAuthProvider>(`/oauth/providers/manage/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  testOAuthProvider: (id: string) => protectedAuthRequest<{ ok: boolean }>(`/oauth/providers/manage/${id}/test`, { method: 'POST' }),
   registrationSetting: () => request<RegistrationSetting>('/settings/registration'),
   updateRegistrationSetting: (allowRegistration: boolean) => request<RegistrationSetting>('/settings/registration', { method: 'PUT', body: JSON.stringify({ allow_registration: allowRegistration }) }),
   createUser: (body: JsonBody) => protectedAuthRequest<AdminUser>('/users', { method: 'POST', body: JSON.stringify(body) }),

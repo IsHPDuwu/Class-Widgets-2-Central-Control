@@ -15,8 +15,10 @@ from .models import (
     Device,
     Organization,
     OrganizationMembership,
+    UserPermissionGrant,
     utc_now,
 )
+from .permissions import legacy_role_allows
 from .security import hash_secret, secrets_match
 
 bearer = HTTPBearer(auto_error=False)
@@ -35,6 +37,7 @@ def require_admin(
             "role": "admin",
             "platform_admin": True,
             "organization_ids": None,
+            "grants": [],
         }
     authorization = request.headers.get("Authorization", "")
     if not authorization.startswith("Bearer "):
@@ -49,12 +52,12 @@ def require_admin(
     user = db.get(AdminUser, session.user_id)
     if user is None or user.disabled:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid session")
+    grants = db.scalars(
+        select(UserPermissionGrant).where(UserPermissionGrant.user_id == user.id)
+    ).all()
+    if request.url.path != "/api/v1/auth/me" and user.authorization_status != "active":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="account pending authorization")
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
-        if user.role == "viewer":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="operator role required",
-            )
         db.add(
             AuditLog(
                 actor=user.username,
@@ -75,7 +78,59 @@ def require_admin(
         "role": user.role,
         "platform_admin": False,
         "organization_ids": organization_ids,
+        "authorization_status": user.authorization_status,
+        "grants": grants,
     }
+
+
+def has_permission(
+    principal: dict[str, Any],
+    permission_key: str,
+    *,
+    organization_id: str | None = None,
+    group_id: str | None = None,
+    device_id: str | None = None,
+) -> bool:
+    if principal["platform_admin"]:
+        return True
+    grants: list[UserPermissionGrant] = principal.get("grants", [])
+    if not grants:
+        return bool(
+            organization_id in principal["organization_ids"]
+            and legacy_role_allows(principal["role"], permission_key)
+        )
+    for grant in grants:
+        if grant.permission_key != permission_key:
+            continue
+        if permission_key.startswith("platform."):
+            return grant.organization_id is None
+        if grant.organization_id != organization_id:
+            continue
+        if grant.resource_type == "organization":
+            return True
+        if grant.resource_type == "group" and grant.resource_id == group_id:
+            return True
+        if grant.resource_type == "device" and grant.resource_id == device_id:
+            return True
+    return False
+
+
+def require_permission(
+    principal: dict[str, Any],
+    permission_key: str,
+    *,
+    organization_id: str | None = None,
+    group_id: str | None = None,
+    device_id: str | None = None,
+) -> None:
+    if not has_permission(
+        principal,
+        permission_key,
+        organization_id=organization_id,
+        group_id=group_id,
+        device_id=device_id,
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="permission denied")
 
 
 def require_organization_access(
@@ -85,14 +140,20 @@ def require_organization_access(
 ) -> Organization:
     organization = db.get(Organization, organization_id)
     if organization is None or (
-        not principal["platform_admin"] and organization_id not in principal["organization_ids"]
+        not principal["platform_admin"]
+        and organization_id not in principal["organization_ids"]
+        and not any(grant.organization_id == organization_id for grant in principal.get("grants", []))
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="organization not found")
     return organization
 
 
 def require_platform_admin(principal: dict[str, Any]) -> None:
-    if not principal["platform_admin"]:
+    if not principal["platform_admin"] and not any(
+        grant.permission_key in {"platform.users.manage", "platform.organizations.manage"}
+        and grant.organization_id is None
+        for grant in principal.get("grants", [])
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="platform admin role required",

@@ -9,6 +9,7 @@ from ..database import get_db
 from ..dependencies import (
     require_admin,
     require_organization_access,
+    require_permission,
     require_platform_admin,
 )
 from ..models import (
@@ -100,7 +101,7 @@ def get_registration_setting(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict[str, bool]:
-    require_platform_admin(principal)
+    require_permission(principal, "platform.settings.manage")
     setting = db.get(SystemSetting, "allow_registration")
     return {"allow_registration": bool(setting and setting.value.get("enabled", False))}
 
@@ -111,7 +112,7 @@ def update_registration_setting(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict[str, bool]:
-    require_platform_admin(principal)
+    require_permission(principal, "platform.settings.manage")
     setting = db.get(SystemSetting, "allow_registration")
     if setting is None:
         setting = SystemSetting(key="allow_registration")
@@ -122,37 +123,72 @@ def update_registration_setting(
     return {"allow_registration": payload.allow_registration}
 
 
-def _require_group_access(group_id: str, principal: dict, db: Session) -> DeviceGroup:
+def _require_group_access(
+    group_id: str,
+    principal: dict,
+    db: Session,
+    permission: str = "organization.groups.view",
+) -> DeviceGroup:
     group = db.get(DeviceGroup, group_id)
     if group is None:
         raise HTTPException(status_code=404, detail="group not found")
     require_organization_access(group.organization_id, principal, db)
+    require_permission(
+        principal,
+        permission,
+        organization_id=group.organization_id,
+        group_id=group.id,
+    )
     return group
 
 
-def _require_device_access(device_id: str, principal: dict, db: Session):
+def _require_device_access(
+    device_id: str,
+    principal: dict,
+    db: Session,
+    permission: str = "organization.devices.view",
+):
     from ..models import Device
 
     device = db.get(Device, device_id)
     if device is None:
         raise HTTPException(status_code=404, detail="device not found")
-    _require_group_access(device.group_id, principal, db)
+    require_organization_access(device.group.organization_id, principal, db)
+    require_permission(
+        principal,
+        permission,
+        organization_id=device.group.organization_id,
+        group_id=device.group_id,
+        device_id=device.id,
+    )
     return device
 
 
-def _require_schedule_access(schedule_id: str, principal: dict, db: Session) -> ScheduleRevision:
+def _require_schedule_access(
+    schedule_id: str,
+    principal: dict,
+    db: Session,
+    permission: str = "organization.schedules.view",
+) -> ScheduleRevision:
     revision = db.get(ScheduleRevision, schedule_id)
     if revision is None:
         raise HTTPException(status_code=404, detail="schedule not found")
     require_organization_access(revision.organization_id, principal, db)
+    require_permission(principal, permission, organization_id=revision.organization_id)
     return revision
 
 
-def _require_policy_access(policy_id: str, principal: dict, db: Session) -> PolicyRevision:
+def _require_policy_access(
+    policy_id: str,
+    principal: dict,
+    db: Session,
+    permission: str = "organization.policies.view",
+) -> PolicyRevision:
     revision = db.get(PolicyRevision, policy_id)
     if revision is None:
         raise HTTPException(status_code=404, detail="policy not found")
     require_organization_access(revision.organization_id, principal, db)
+    require_permission(principal, permission, organization_id=revision.organization_id)
     return revision
 
 
@@ -162,7 +198,7 @@ def create_organization(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    require_platform_admin(principal)
+    require_permission(principal, "platform.organizations.manage")
     organization = Organization(name=payload.name)
     db.add(organization)
     db.commit()
@@ -188,6 +224,7 @@ def create_group(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     require_organization_access(payload.organization_id, principal, db)
+    require_permission(principal, "organization.groups.create", organization_id=payload.organization_id)
     group = DeviceGroup(organization_id=payload.organization_id, name=payload.name)
     db.add(group)
     db.commit()
@@ -201,6 +238,7 @@ def list_groups(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.groups.view", organization_id=organization_id)
     groups = db.scalars(
         select(DeviceGroup)
         .where(DeviceGroup.organization_id == organization_id)
@@ -226,7 +264,7 @@ def prepare_class_swap(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    device = _require_device_access(payload.device_id, principal, db)
+    device = _require_device_access(payload.device_id, principal, db, "organization.class_swaps.execute")
     if device.revoked:
         raise HTTPException(status_code=409, detail="device is revoked")
     request_id = generate_secret(27)[:36]
@@ -248,7 +286,7 @@ def get_class_swap_preparation(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    device = _require_device_access(device_id, principal, db)
+    device = _require_device_access(device_id, principal, db, "organization.class_swaps.view")
     snapshot = db.get(DeviceScheduleSnapshot, device.id)
     ready = snapshot is not None and snapshot.request_id == request_id
     return {
@@ -268,7 +306,7 @@ def get_class_swap_snapshot(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    device = _require_device_access(device_id, principal, db)
+    device = _require_device_access(device_id, principal, db, "organization.class_swaps.view")
     snapshot = db.get(DeviceScheduleSnapshot, device.id)
     if snapshot is None or snapshot.request_id != request_id:
         raise HTTPException(status_code=404, detail="fresh schedule snapshot not found")
@@ -287,7 +325,7 @@ def create_class_swap(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    device = _require_device_access(payload.device_id, principal, db)
+    device = _require_device_access(payload.device_id, principal, db, "organization.class_swaps.execute")
     if device.revoked:
         raise HTTPException(status_code=409, detail="device is revoked")
 
@@ -363,6 +401,7 @@ def list_class_swaps(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.class_swaps.view", organization_id=organization_id)
     sessions = db.scalars(
         select(ClassSwapSession)
         .where(ClassSwapSession.organization_id == organization_id)
@@ -393,6 +432,8 @@ def restore_class_swap(
     if session is None:
         raise HTTPException(status_code=404, detail="class swap session not found")
     require_organization_access(session.organization_id, principal, db)
+    device = db.get(Device, session.device_id)
+    require_permission(principal, "organization.class_swaps.restore", organization_id=session.organization_id, group_id=device.group_id if device else None, device_id=session.device_id)
     if session.status != "active":
         return {"id": session.id, "status": session.status, "command_id": None}
     command = _create_device_command(
@@ -415,8 +456,8 @@ def move_device(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    device = _require_device_access(device_id, principal, db)
-    group = _require_group_access(payload.group_id, principal, db)
+    device = _require_device_access(device_id, principal, db, "organization.devices.update")
+    group = _require_group_access(payload.group_id, principal, db, "organization.devices.update")
     if device.group.organization_id != group.organization_id:
         raise HTTPException(
             status_code=400, detail="device and group belong to different organizations"
@@ -435,7 +476,7 @@ def delete_device(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> None:
     """撤销并删除设备，使其安装实例可以重新配对。"""
-    device = _require_device_access(device_id, principal, db)
+    device = _require_device_access(device_id, principal, db, "organization.devices.delete")
     db.query(CommandAcknowledgement).filter(
         CommandAcknowledgement.device_id == device.id
     ).delete(synchronize_session=False)
@@ -453,7 +494,7 @@ def create_pairing_code(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    _require_group_access(group_id, principal, db)
+    _require_group_access(group_id, principal, db, "organization.groups.pair")
     plain_code = generate_secret(9).replace("-", "").replace("_", "")[:10].upper()
     expires_at = utc_now() + timedelta(minutes=payload.expires_in_minutes)
     pairing_code = PairingCode(
@@ -473,6 +514,7 @@ def publish_schedule(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     require_organization_access(payload.organization_id, principal, db)
+    require_permission(principal, "organization.schedules.create", organization_id=payload.organization_id)
     latest = db.scalar(
         select(func.max(ScheduleRevision.revision)).where(
             ScheduleRevision.organization_id == payload.organization_id
@@ -504,6 +546,7 @@ def list_schedules(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.schedules.view", organization_id=organization_id)
     revisions = db.scalars(
         select(ScheduleRevision)
         .where(ScheduleRevision.organization_id == organization_id)
@@ -532,7 +575,7 @@ def assign_schedule(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    revision = _require_schedule_access(schedule_id, principal, db)
+    revision = _require_schedule_access(schedule_id, principal, db, "organization.schedules.assign")
     groups = db.scalars(select(DeviceGroup).where(DeviceGroup.id.in_(payload.group_ids))).all()
     if len(groups) != len(set(payload.group_ids)) or any(
         group.organization_id != revision.organization_id for group in groups
@@ -558,7 +601,7 @@ def update_schedule(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    original = _require_schedule_access(schedule_id, principal, db)
+    original = _require_schedule_access(schedule_id, principal, db, "organization.schedules.update")
     latest = db.scalar(
         select(func.max(ScheduleRevision.revision)).where(
             ScheduleRevision.organization_id == original.organization_id
@@ -582,7 +625,7 @@ def clone_schedule(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    original = _require_schedule_access(schedule_id, principal, db)
+    original = _require_schedule_access(schedule_id, principal, db, "organization.schedules.create")
     latest = db.scalar(
         select(func.max(ScheduleRevision.revision)).where(
             ScheduleRevision.organization_id == original.organization_id
@@ -606,6 +649,7 @@ def publish_policy(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     require_organization_access(payload.organization_id, principal, db)
+    require_permission(principal, "organization.policies.create", organization_id=payload.organization_id)
     latest = db.scalar(
         select(func.max(PolicyRevision.revision)).where(
             PolicyRevision.organization_id == payload.organization_id
@@ -637,6 +681,7 @@ def list_policies(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.policies.view", organization_id=organization_id)
     revisions = db.scalars(
         select(PolicyRevision)
         .where(PolicyRevision.organization_id == organization_id)
@@ -665,7 +710,7 @@ def assign_policy(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    revision = _require_policy_access(policy_id, principal, db)
+    revision = _require_policy_access(policy_id, principal, db, "organization.policies.assign")
     groups = db.scalars(select(DeviceGroup).where(DeviceGroup.id.in_(payload.group_ids))).all()
     if len(groups) != len(set(payload.group_ids)) or any(
         group.organization_id != revision.organization_id for group in groups
@@ -691,7 +736,7 @@ def update_policy(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    original = _require_policy_access(policy_id, principal, db)
+    original = _require_policy_access(policy_id, principal, db, "organization.policies.update")
     latest = db.scalar(
         select(func.max(PolicyRevision.revision)).where(
             PolicyRevision.organization_id == original.organization_id
@@ -715,7 +760,7 @@ def clone_policy(
     db: Annotated[Session, Depends(get_db)],
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
-    original = _require_policy_access(policy_id, principal, db)
+    original = _require_policy_access(policy_id, principal, db, "organization.policies.create")
     latest = db.scalar(
         select(func.max(PolicyRevision.revision)).where(
             PolicyRevision.organization_id == original.organization_id
@@ -739,9 +784,9 @@ def create_command(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     if payload.group_id:
-        _require_group_access(payload.group_id, principal, db)
+        _require_group_access(payload.group_id, principal, db, "organization.commands.execute")
     if payload.device_id:
-        _require_device_access(payload.device_id, principal, db)
+        _require_device_access(payload.device_id, principal, db, "organization.commands.execute")
     latest_cursor = db.scalar(select(func.max(Command.cursor))) or 0
     command = Command(
         cursor=latest_cursor + 1,
@@ -764,6 +809,7 @@ def list_commands(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.commands.view", organization_id=organization_id)
     commands = db.scalars(
         select(Command)
         .where(
@@ -830,6 +876,7 @@ def list_diagnostics(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.diagnostics.view", organization_id=organization_id)
     reports = db.scalars(
         select(DiagnosticReport)
         .join(Device, DiagnosticReport.device_id == Device.id)
@@ -869,7 +916,7 @@ def get_diagnostic(
     report = db.get(DiagnosticReport, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="diagnostic report not found")
-    device = _require_device_access(report.device_id, principal, db)
+    device = _require_device_access(report.device_id, principal, db, "organization.diagnostics.view")
     return {
         "id": report.id,
         "device_id": report.device_id,
@@ -889,6 +936,7 @@ def list_devices(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> list[dict]:
     require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.devices.view", organization_id=organization_id)
     devices = db.scalars(
         select(Device)
         .join(DeviceGroup)

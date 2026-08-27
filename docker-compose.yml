@@ -23,6 +23,8 @@ services:
     environment:
       CC_DATABASE_URL: postgresql+psycopg://central:${POSTGRES_PASSWORD}@database:5432/central
       CC_ADMIN_KEY: ${CC_ADMIN_KEY:?set CC_ADMIN_KEY}
+      CC_PUBLIC_URL: ${CC_PUBLIC_URL:?set CC_PUBLIC_URL}
+      CC_SECRET_ENCRYPTION_KEY: ${CC_SECRET_ENCRYPTION_KEY:?set CC_SECRET_ENCRYPTION_KEY}
       CC_ALLOW_INSECURE_HTTP: "false"
     ports:
       - "127.0.0.1:8000:8000"

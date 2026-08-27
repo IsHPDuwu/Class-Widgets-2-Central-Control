@@ -452,3 +452,40 @@ class UserCreate(BaseModel):
 
 class UserOrganizationAssignment(BaseModel):
     organization_ids: set[str] = Field(default_factory=set)
+
+
+class PermissionGrantPayload(BaseModel):
+    permission_key: str = Field(min_length=1, max_length=100)
+    organization_id: str | None = None
+    resource_type: Literal["platform", "organization", "group", "device"] = "organization"
+    resource_id: str | None = None
+
+
+class UserPermissionAssignment(BaseModel):
+    grants: list[PermissionGrantPayload] = Field(default_factory=list, max_length=2000)
+    authorization_status: Literal["pending", "active"] = "active"
+
+
+class OAuthProviderCreate(BaseModel):
+    key: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9][a-z0-9_-]*$")
+    name: str = Field(min_length=1, max_length=120)
+    issuer_url: str = Field(min_length=8, max_length=500)
+    client_id: str = Field(min_length=1, max_length=300)
+    client_secret: str = Field(min_length=1, max_length=1000)
+    scopes: str = Field(default="openid profile email", min_length=6, max_length=500)
+    enabled: bool = True
+    allow_signup: bool = True
+
+
+class OAuthProviderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    issuer_url: str = Field(min_length=8, max_length=500)
+    client_id: str = Field(min_length=1, max_length=300)
+    client_secret: str = Field(default="", max_length=1000)
+    scopes: str = Field(default="openid profile email", min_length=6, max_length=500)
+    enabled: bool = True
+    allow_signup: bool = True
+
+
+class OAuthExchangeRequest(BaseModel):
+    code: str = Field(min_length=20, max_length=500)

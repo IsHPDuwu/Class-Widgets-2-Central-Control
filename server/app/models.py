@@ -244,12 +244,21 @@ class AdminUser(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(256))
+    password_hash: Mapped[str | None] = mapped_column(String(256), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="viewer")
+    display_name: Mapped[str] = mapped_column(String(120), default="")
+    email: Mapped[str] = mapped_column(String(320), default="")
+    authorization_status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     memberships: Mapped[list[OrganizationMembership]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    permission_grants: Mapped[list[UserPermissionGrant]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    oauth_identities: Mapped[list[OAuthIdentity]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -272,6 +281,89 @@ class AdminSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("admin_users.id"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class UserPermissionGrant(Base):
+    __tablename__ = "user_permission_grants"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("admin_users.id"), index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True, index=True
+    )
+    resource_type: Mapped[str] = mapped_column(String(20), default="organization")
+    resource_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    permission_key: Mapped[str] = mapped_column(String(100), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    user: Mapped[AdminUser] = relationship(back_populates="permission_grants")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "organization_id", "resource_type", "resource_id", "permission_key",
+            name="uq_user_permission_grant",
+        ),
+    )
+
+
+class OAuthProvider(Base):
+    __tablename__ = "oauth_providers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    issuer_url: Mapped[str] = mapped_column(String(500))
+    client_id: Mapped[str] = mapped_column(String(300))
+    client_secret_encrypted: Mapped[str] = mapped_column(Text)
+    scopes: Mapped[str] = mapped_column(String(500), default="openid profile email")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    allow_signup: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    identities: Mapped[list[OAuthIdentity]] = relationship(back_populates="provider")
+
+
+class OAuthIdentity(Base):
+    __tablename__ = "oauth_identities"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    provider_id: Mapped[str] = mapped_column(ForeignKey("oauth_providers.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("admin_users.id"), index=True)
+    issuer: Mapped[str] = mapped_column(String(500))
+    subject: Mapped[str] = mapped_column(String(500))
+    email: Mapped[str] = mapped_column(String(320), default="")
+    display_name: Mapped[str] = mapped_column(String(120), default="")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    provider: Mapped[OAuthProvider] = relationship(back_populates="identities")
+    user: Mapped[AdminUser] = relationship(back_populates="oauth_identities")
+
+    __table_args__ = (UniqueConstraint("provider_id", "subject"),)
+
+
+class OAuthLoginAttempt(Base):
+    __tablename__ = "oauth_login_attempts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    provider_id: Mapped[str] = mapped_column(ForeignKey("oauth_providers.id"), index=True)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    nonce: Mapped[str] = mapped_column(String(160))
+    code_verifier_encrypted: Mapped[str] = mapped_column(Text)
+    return_path: Mapped[str] = mapped_column(String(300), default="/")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class OAuthExchangeCode(Base):
+    __tablename__ = "oauth_exchange_codes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    session_token_encrypted: Mapped[str] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 

@@ -2,6 +2,8 @@ import base64
 import hashlib
 import secrets
 
+from cryptography.fernet import Fernet, InvalidToken
+
 
 def generate_secret(byte_count: int = 32) -> str:
     return secrets.token_urlsafe(byte_count)
@@ -22,6 +24,8 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, encoded: str) -> bool:
+    if not encoded:
+        return False
     try:
         algorithm, salt_text, digest_text = encoded.split("$", 2)
         if algorithm != "scrypt":
@@ -32,3 +36,21 @@ def verify_password(password: str, encoded: str) -> bool:
         return secrets.compare_digest(actual, expected)
     except (ValueError, TypeError):
         return False
+
+
+def encrypt_secret(value: str, encryption_key: str) -> str:
+    if not encryption_key:
+        raise RuntimeError("CC_SECRET_ENCRYPTION_KEY is required")
+    try:
+        return Fernet(encryption_key.encode("ascii")).encrypt(value.encode("utf-8")).decode("ascii")
+    except (ValueError, UnicodeEncodeError) as exc:
+        raise RuntimeError("CC_SECRET_ENCRYPTION_KEY is invalid") from exc
+
+
+def decrypt_secret(value: str, encryption_key: str) -> str:
+    if not encryption_key:
+        raise RuntimeError("CC_SECRET_ENCRYPTION_KEY is required")
+    try:
+        return Fernet(encryption_key.encode("ascii")).decrypt(value.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, UnicodeError) as exc:
+        raise RuntimeError("unable to decrypt OAuth secret") from exc

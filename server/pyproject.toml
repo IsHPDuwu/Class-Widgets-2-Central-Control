@@ -5,6 +5,8 @@ description = "Central control service for Class Widgets 2"
 requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.16,<2",
+  "authlib>=1.6,<2",
+  "cryptography>=45,<47",
   "fastapi>=0.116,<1",
   "psycopg[binary]>=3.2,<4",
   "pydantic-settings>=2.10,<3",

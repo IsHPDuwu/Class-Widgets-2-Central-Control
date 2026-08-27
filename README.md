@@ -37,6 +37,8 @@
 ```dotenv
 CC_DATABASE_URL=sqlite:///./central-control.db
 CC_ADMIN_KEY=请替换为至少32位随机密钥
+CC_PUBLIC_URL=http://127.0.0.1:8000
+CC_SECRET_ENCRYPTION_KEY=请替换为Fernet密钥
 CC_ALLOW_INSECURE_HTTP=true
 CC_POLL_INTERVAL_SECONDS=10
 ```
@@ -83,6 +85,8 @@ Copy-Item .env.example .env
 ```dotenv
 POSTGRES_PASSWORD=生成一个长随机密码
 CC_ADMIN_KEY=生成一个至少32位随机密钥
+CC_PUBLIC_URL=https://集控公网域名
+CC_SECRET_ENCRYPTION_KEY=生成一个Fernet密钥
 ```
 
 不要将包含真实密码或管理员密钥的 `.env` 提交到 Git。
@@ -125,6 +129,8 @@ docker compose down -v
 | `POSTGRES_PASSWORD` | Compose 必填 | PostgreSQL 密码 |
 | `CC_DATABASE_URL` | 是 | SQLAlchemy 数据库连接串 |
 | `CC_ADMIN_KEY` | 是 | 平台启动密钥；建议至少 32 位随机字符串 |
+| `CC_PUBLIC_URL` | OIDC 必填 | 浏览器可访问的集控根地址，用于生成 OIDC 回调地址 |
+| `CC_SECRET_ENCRYPTION_KEY` | OIDC 必填 | 加密 Provider Client Secret、PKCE 和一次性交换令牌的 Fernet 密钥 |
 | `CC_ALLOW_INSECURE_HTTP` | 开发可用 | 是否允许设备通过非 HTTPS 连接；生产必须为 `false` |
 | `CC_POLL_INTERVAL_SECONDS` | 否 | 设备默认轮询间隔，默认 10 秒 |
 
@@ -139,12 +145,13 @@ docker compose down -v
 
 ## 认证与多租户
 
-平台支持两种管理端认证方式：
+平台支持三种管理端认证方式：
 
 1. 平台管理员密钥：请求头 `X-Admin-Key`
 2. 管理员账号登录：请求头 `Authorization: Bearer <session-token>`
+3. 动态配置的通用 OpenID Connect Provider（Authorization Code + PKCE）
 
-组织即租户。平台管理员可以创建组织、创建成员并分配组织权限；普通成员只能访问显式授权的组织，跨租户资源访问会被拒绝。
+组织即租户。权限按“平台 / 组织 / 分组 / 设备”范围授予，组织授权向其分组和设备继承，分组授权向其设备继承；系统只保存 Allow，不提供显式 Deny。OIDC 首次登录会创建待授权账号，不会按邮箱自动合并已有账号。
 
 首次部署后，可在 Web 管理后台输入 `CC_ADMIN_KEY` 建立平台连接，然后：
 
@@ -152,6 +159,12 @@ docker compose down -v
 2. 创建成员账号
 3. 选择成员可访问的组织
 4. 让成员使用账号和密码登录
+
+OIDC Provider 可在“平台管理”中动态添加。Provider 后台应将回调地址配置为：
+
+`<CC_PUBLIC_URL>/api/v1/auth/oauth/<provider-key>/callback`
+
+可使用 Python 生成 Fernet 密钥：`from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())`。密钥丢失后，现有 Provider Secret 将无法解密；不要提交或随意轮换该值。
 
 ## 数据库迁移
 

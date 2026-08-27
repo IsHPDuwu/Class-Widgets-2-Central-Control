@@ -1,8 +1,10 @@
+import base64
 import os
 from pathlib import Path
 
 os.environ["CC_DATABASE_URL"] = "sqlite:///./test-central-control.db"
 os.environ["CC_ADMIN_KEY"] = "test-admin-key-123456"
+os.environ["CC_SECRET_ENCRYPTION_KEY"] = base64.urlsafe_b64encode(b"0" * 32).decode()
 
 import pytest
 from fastapi.testclient import TestClient
