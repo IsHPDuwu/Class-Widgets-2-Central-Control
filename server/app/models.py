@@ -122,7 +122,7 @@ class ClassSwapSession(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
-    group_id: Mapped[str] = mapped_column(ForeignKey("device_groups.id"), index=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
     effective_date: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     operations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)

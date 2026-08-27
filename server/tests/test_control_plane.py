@@ -164,7 +164,7 @@ def test_client_schedule_snapshot_and_class_swap_event(client, admin_headers):
     prepared = client.post(
         "/api/v1/admin/class-swaps/prepare",
         headers=admin_headers,
-        json={"group_id": group["id"]},
+        json={"device_id": paired["device_id"]},
     )
     assert prepared.status_code == 201
     request_id = prepared.json()["request_id"]
@@ -229,10 +229,11 @@ def test_client_schedule_snapshot_and_class_swap_event(client, admin_headers):
     assert uploaded.status_code == 200
 
     preparation = client.get(
-        f"/api/v1/admin/class-swaps/preparations/{request_id}?group_id={group['id']}",
+        f"/api/v1/admin/class-swaps/preparations/{request_id}?device_id={paired['device_id']}",
         headers=admin_headers,
     ).json()
-    assert preparation["devices"][0]["ready"] is True
+    assert preparation["device_id"] == paired["device_id"]
+    assert preparation["ready"] is True
 
     snapshot = client.get(
         f"/api/v1/admin/class-swaps/snapshots/{paired['device_id']}?request_id={request_id}",
@@ -244,9 +245,8 @@ def test_client_schedule_snapshot_and_class_swap_event(client, admin_headers):
         "/api/v1/admin/class-swaps",
         headers=admin_headers,
         json={
-            "group_id": group["id"],
+            "device_id": paired["device_id"],
             "request_id": request_id,
-            "device_ids": [paired["device_id"]],
             "operation": "swap",
             "day_of_week": 1,
             "week_of_cycle": 1,
@@ -256,6 +256,12 @@ def test_client_schedule_snapshot_and_class_swap_event(client, admin_headers):
     )
     assert created.status_code == 201
     session_id = created.json()["id"]
+    sessions = client.get(
+        f"/api/v1/admin/class-swaps?organization_id={organization['id']}",
+        headers=admin_headers,
+    ).json()
+    assert sessions[0]["device_id"] == paired["device_id"]
+    assert "group_id" not in sessions[0]
 
     event_sync = client.post(
         "/api/v1/device/sync",

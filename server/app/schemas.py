@@ -314,13 +314,12 @@ class CommandCreate(BaseModel):
 
 
 class ClassSwapPrepare(BaseModel):
-    group_id: str
+    device_id: str
 
 
 class ClassSwapCreate(BaseModel):
-    group_id: str
+    device_id: str
     request_id: str = Field(min_length=1, max_length=36)
-    device_ids: list[str] = Field(default_factory=list, min_length=1)
     operation: Literal["apply_today", "swap", "replace"]
     day_of_week: Annotated[int, Field(ge=1, le=7)]
     week_of_cycle: Annotated[int, Field(ge=1, le=52)]
@@ -331,8 +330,6 @@ class ClassSwapCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_operation(self) -> ClassSwapCreate:
-        if len(self.device_ids) != len(set(self.device_ids)):
-            raise ValueError("device_ids must be unique")
         if self.operation == "swap" and (not self.entry_id_a or not self.entry_id_b):
             raise ValueError("swap requires entry_id_a and entry_id_b")
         if self.operation == "replace" and (not self.entry_id or not self.subject_id):

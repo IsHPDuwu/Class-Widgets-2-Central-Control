@@ -54,8 +54,11 @@ export type ScheduleRecord = {
 
 export type ClassSwapPreparation = {
   request_id: string
-  group_id: string
-  devices: Array<{ device_id: string; device_name: string; ready: boolean; schedule_hash: string; uploaded_at: string | null }>
+  device_id: string
+  device_name: string
+  ready: boolean
+  schedule_hash: string
+  uploaded_at: string | null
 }
 
 export type ClassSwapSnapshot = {
@@ -68,7 +71,7 @@ export type ClassSwapSnapshot = {
 
 export type ClassSwapSession = {
   id: string
-  group_id: string
+  device_id: string
   effective_date: string
   status: string
   operations: Array<Record<string, unknown>>
@@ -232,12 +235,12 @@ export const api = {
   clonePolicy: (id: string, name: string) => post<{ id: string; revision: number }>(`/policies/${id}/clone`, { name }),
   assignSchedule: (id: string, groupIds: string[]) => put(`/schedules/${id}/groups`, { group_ids: groupIds }),
   assignPolicy: (id: string, groupIds: string[]) => put(`/policies/${id}/groups`, { group_ids: groupIds }),
-  prepareClassSwap: (groupId: string) => post<{ request_id: string; device_ids: string[] }>('/class-swaps/prepare', { group_id: groupId }),
-  classSwapPreparation: (requestId: string, groupId: string) => request<ClassSwapPreparation>(`/class-swaps/preparations/${encodeURIComponent(requestId)}?group_id=${encodeURIComponent(groupId)}`),
+  prepareClassSwap: (deviceId: string) => post<{ request_id: string; device_id: string }>('/class-swaps/prepare', { device_id: deviceId }),
+  classSwapPreparation: (requestId: string, deviceId: string) => request<ClassSwapPreparation>(`/class-swaps/preparations/${encodeURIComponent(requestId)}?device_id=${encodeURIComponent(deviceId)}`),
   classSwapSnapshot: (deviceId: string, requestId: string) => request<ClassSwapSnapshot>(`/class-swaps/snapshots/${encodeURIComponent(deviceId)}?request_id=${encodeURIComponent(requestId)}`),
   classSwaps: (organizationId: string) => request<ClassSwapSession[]>(`/class-swaps?organization_id=${encodeURIComponent(organizationId)}`),
-  createClassSwap: (body: JsonBody) => post<{ id: string; command_ids: string[] }>('/class-swaps', body),
-  restoreClassSwap: (id: string) => post<{ id: string; status: string; command_ids: string[] }>(`/class-swaps/${id}/restore`, {}),
+  createClassSwap: (body: JsonBody) => post<{ id: string; command_id: string }>('/class-swaps', body),
+  restoreClassSwap: (id: string) => post<{ id: string; status: string; command_id: string | null }>(`/class-swaps/${id}/restore`, {}),
   moveDevice: (id: string, groupId: string) => patch(`/devices/${id}/group`, { group_id: groupId }),
   deleteDevice: (id: string) => request<void>(`/devices/${id}`, { method: 'DELETE' }),
   automations: (organizationId: string) => request<AutomationRule[]>(`/automations?organization_id=${encodeURIComponent(organizationId)}`),
