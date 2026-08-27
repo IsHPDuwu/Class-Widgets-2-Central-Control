@@ -72,6 +72,29 @@ def _create_device_command(
     return command
 
 
+def _week_selector_matches(selector, week: int, max_cycle: int) -> bool:
+    if selector is None or selector == "all":
+        return True
+    if isinstance(selector, list):
+        return week in selector
+    return isinstance(selector, int) and week >= selector and (week - selector) % max_cycle == 0
+
+
+def _class_entries_for(snapshot_data: dict, day: int, week: int) -> list[dict]:
+    max_cycle = int(snapshot_data.get("meta", {}).get("maxWeekCycle", 1) or 1)
+    for timeline in snapshot_data.get("days", []):
+        if day not in (timeline.get("dayOfWeek") or []):
+            continue
+        if not _week_selector_matches(timeline.get("weeks"), week, max_cycle):
+            continue
+        return [
+            entry
+            for entry in timeline.get("entries", [])
+            if entry.get("type") in {"class", "activity"}
+        ]
+    return []
+
+
 @router.get("/settings/registration")
 def get_registration_setting(
     db: Annotated[Session, Depends(get_db)],
@@ -287,6 +310,13 @@ def create_class_swap(
     max_cycle = int(snapshot.data.get("meta", {}).get("maxWeekCycle", 1))
     if payload.week_of_cycle > max_cycle:
         raise HTTPException(status_code=409, detail="device does not have that cycle week")
+    if not _class_entries_for(
+        snapshot.data, payload.day_of_week, payload.week_of_cycle
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="device has no classes for the selected day and cycle week",
+        )
 
     today = datetime.now().date()
     session = db.scalar(

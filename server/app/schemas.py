@@ -203,7 +203,7 @@ class RuntimeStatePayload(BaseModel):
 
 class ScheduleSnapshotUpload(BaseModel):
     request_id: str = Field(min_length=1, max_length=36)
-    schedule: SchedulePayload
+    schedule: dict[str, Any] = Field(default_factory=dict)
 
 
 class SyncRequest(BaseModel):

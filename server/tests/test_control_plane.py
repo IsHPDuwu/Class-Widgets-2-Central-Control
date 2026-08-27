@@ -284,6 +284,93 @@ def test_client_schedule_snapshot_and_class_swap_event(client, admin_headers):
     assert restored.json()["status"] == "restoring"
 
 
+def test_stale_and_empty_schedule_snapshots_do_not_disconnect_device(client, admin_headers):
+    _, _, code = bootstrap(client, admin_headers)
+    paired = pair(client, code).json()
+    device_id = paired["device_id"]
+    device_headers = {"Authorization": f"Bearer {paired['device_token']}"}
+    empty_schedule = {
+        "meta": {
+            "id": "empty-client-meta",
+            "version": 1,
+            "maxWeekCycle": 2,
+            "startDate": "2026-08-24",
+        },
+        "subjects": [],
+        "days": [],
+        "overrides": [],
+    }
+
+    stale = client.post(
+        "/api/v1/device/sync",
+        headers=device_headers,
+        json={
+            "protocol_version": 1,
+            "cursor": 0,
+            "schedule_snapshot": {
+                "request_id": "obsolete-request",
+                "schedule": empty_schedule,
+            },
+        },
+    )
+    assert stale.status_code == 200
+
+    prepared = client.post(
+        "/api/v1/admin/class-swaps/prepare",
+        headers=admin_headers,
+        json={"device_id": device_id},
+    )
+    request_id = prepared.json()["request_id"]
+    command_sync = client.post(
+        "/api/v1/device/sync",
+        headers=device_headers,
+        json={"protocol_version": 1, "cursor": 0},
+    ).json()
+    request_command = next(
+        command
+        for command in command_sync["commands"]
+        if command["type"] == "request_schedule_snapshot"
+    )
+    uploaded = client.post(
+        "/api/v1/device/sync",
+        headers=device_headers,
+        json={
+            "protocol_version": 1,
+            "cursor": command_sync["cursor"],
+            "schedule_snapshot": {
+                "request_id": request_id,
+                "schedule": empty_schedule,
+            },
+            "acknowledgements": [
+                {"command_id": request_command["command_id"], "status": "succeeded"}
+            ],
+        },
+    )
+    assert uploaded.status_code == 200
+
+    preparation = client.get(
+        f"/api/v1/admin/class-swaps/preparations/{request_id}?device_id={device_id}",
+        headers=admin_headers,
+    ).json()
+    assert preparation["ready"] is True
+
+    rejected = client.post(
+        "/api/v1/admin/class-swaps",
+        headers=admin_headers,
+        json={
+            "device_id": device_id,
+            "request_id": request_id,
+            "operation": "apply_today",
+            "day_of_week": 1,
+            "week_of_cycle": 1,
+        },
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"] == (
+        "device has no classes for the selected day and cycle week"
+    )
+
+
 def test_policy_accepts_all_valid_config_paths(client, admin_headers):
     organization, group, _ = bootstrap(client, admin_headers)
     response = client.post(
