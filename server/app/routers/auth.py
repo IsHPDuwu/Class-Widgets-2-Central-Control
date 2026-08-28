@@ -124,8 +124,14 @@ async def _discovery(provider: OAuthProvider, settings: Settings) -> dict:
         raise HTTPException(status_code=400, detail="unable to load OIDC discovery") from exc
     if document.get("issuer", "").rstrip("/") != issuer:
         raise HTTPException(status_code=400, detail="OIDC discovery issuer mismatch")
-    for key in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
+    for key in ("authorization_endpoint", "token_endpoint"):
         await _validate_remote_url(str(document.get(key, "")), settings, key)
+    if document.get("jwks_uri"):
+        await _validate_remote_url(str(document["jwks_uri"]), settings, "jwks_uri")
+    elif not document.get("userinfo_endpoint"):
+        raise HTTPException(status_code=400, detail="OIDC discovery requires jwks_uri or userinfo_endpoint")
+    else:
+        await _validate_remote_url(str(document["userinfo_endpoint"]), settings, "userinfo_endpoint")
     return document
 
 
@@ -569,34 +575,54 @@ async def oauth_callback(
             if token_response.status_code >= 400 or len(token_response.content) > 1_000_000:
                 raise HTTPException(status_code=400, detail="OIDC token exchange failed")
             token = token_response.json()
-            async with client.stream("GET", document["jwks_uri"]) as jwks_response:
-                jwks_response.raise_for_status()
-                jwks_content = await jwks_response.aread()
-                if len(jwks_content) > 1_000_000:
-                    raise ValueError("JWKS document too large")
-                jwks = jwks_response.json()
+            jwks = None
+            if token.get("id_token") and document.get("jwks_uri"):
+                async with client.stream("GET", document["jwks_uri"]) as jwks_response:
+                    jwks_response.raise_for_status()
+                    jwks_content = await jwks_response.aread()
+                    if len(jwks_content) > 1_000_000:
+                        raise ValueError("JWKS document too large")
+                    jwks = jwks_response.json()
+            elif not token.get("access_token"):
+                raise ValueError("OIDC token response has no id_token or access_token")
     except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="OIDC provider request failed") from exc
-    try:
-        claims = jwt.decode(token["id_token"], jwks, claims_options={"iss": {"essential": True, "value": document["issuer"]}, "aud": {"essential": True, "value": provider.client_id}, "nonce": {"essential": True, "value": nonce}})
-        claims.validate()
-    except (JoseError, KeyError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="invalid OIDC identity token") from exc
+    if token.get("id_token") and jwks is not None:
+        try:
+            claims = jwt.decode(token["id_token"], jwks, claims_options={"iss": {"essential": True, "value": document["issuer"]}, "aud": {"essential": True, "value": provider.client_id}, "nonce": {"essential": True, "value": nonce}})
+            claims.validate()
+        except (JoseError, KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="invalid OIDC identity token") from exc
+    else:
+        try:
+            async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+                userinfo_response = await client.get(
+                    document["userinfo_endpoint"],
+                    headers={"Authorization": f"Bearer {token['access_token']}"},
+                )
+                userinfo_response.raise_for_status()
+                if len(userinfo_response.content) > 1_000_000:
+                    raise ValueError("userinfo response too large")
+                claims = userinfo_response.json()
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="OIDC UserInfo request failed") from exc
+        if not isinstance(claims, dict) or not claims.get("sub"):
+            raise HTTPException(status_code=400, detail="OIDC UserInfo has no subject")
     subject = str(claims["sub"])
     identity = db.scalar(select(OAuthIdentity).where(OAuthIdentity.provider_id == provider.id, OAuthIdentity.subject == subject))
     if identity is None:
         if not provider.allow_signup:
             raise HTTPException(status_code=403, detail="OAuth account is not invited")
-        base_username = str(claims.get("preferred_username") or claims.get("email") or f"oidc-{subject[:20]}")[:70]
+        base_username = str(claims.get("preferred_username") or claims.get("username") or claims.get("email") or f"oidc-{subject[:20]}")[:70]
         username = base_username
         suffix = 1
         while db.scalar(select(AdminUser).where(AdminUser.username == username)):
             suffix += 1
             username = f"{base_username[:70]}-{suffix}"
-        user = AdminUser(username=username, password_hash=None, role="viewer", display_name=str(claims.get("name", ""))[:120], email=str(claims.get("email", ""))[:320], authorization_status="pending")
+        user = AdminUser(username=username, password_hash=None, role="viewer", display_name=str(claims.get("name") or claims.get("display_name") or "")[:120], email=str(claims.get("email", ""))[:320], authorization_status="pending")
         db.add(user)
         db.flush()
-        identity = OAuthIdentity(provider_id=provider.id, user_id=user.id, issuer=str(claims.get("iss", "")), subject=subject, email=user.email, display_name=user.display_name)
+        identity = OAuthIdentity(provider_id=provider.id, user_id=user.id, issuer=str(document["issuer"]), subject=subject, email=user.email, display_name=user.display_name)
         db.add(identity)
     else:
         user = db.get(AdminUser, identity.user_id)

@@ -1,8 +1,12 @@
+import asyncio
 import base64
 from datetime import timedelta
+from unittest.mock import patch
 
+from app.config import Settings
 from app.database import SessionLocal
-from app.models import OAuthExchangeCode, utc_now
+from app.models import OAuthExchangeCode, OAuthProvider, utc_now
+from app.routers.auth import _discovery
 from app.security import encrypt_secret, generate_secret, hash_secret
 
 
@@ -106,3 +110,47 @@ def test_oauth_exchange_code_is_single_use(client):
     assert first.json()["token"] == session_token
     second = client.post("/api/v1/auth/oauth/exchange", json={"code": plaintext_code})
     assert second.status_code == 400
+
+
+def test_cp_oauth_discovery_without_jwks_uses_userinfo():
+    provider = OAuthProvider(issuer_url="https://www.cpoauth.com")
+    settings = Settings(allow_insecure_http=False, secret_encryption_key=base64.urlsafe_b64encode(b"0" * 32).decode())
+    discovery = {
+        "issuer": "https://www.cpoauth.com",
+        "authorization_endpoint": "https://www.cpoauth.com/oauth/authorize",
+        "token_endpoint": "https://www.cpoauth.com/api/oauth/token",
+        "userinfo_endpoint": "https://www.cpoauth.com/api/oauth/userinfo",
+    }
+
+    class Response:
+        content = b"{}"
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return discovery
+
+        async def aread(self):
+            return self.content
+
+    class Stream:
+        async def __aenter__(self):
+            return Response()
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def stream(self, *_args, **_kwargs):
+            return Stream()
+
+    with patch("app.routers.auth.httpx.AsyncClient", return_value=Client()):
+        result = asyncio.run(_discovery(provider, settings))
+    assert result["userinfo_endpoint"].endswith("/userinfo")
