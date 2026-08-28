@@ -209,6 +209,7 @@ export const api = {
   login: (username: string, password: string) => authRequest<{ token: string; expires_at: string; role: string }>('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   oauthProvidersPublic: () => authRequest<OAuthProviderPublic[]>('/oauth/providers'),
   exchangeOAuthCode: (code: string) => authRequest<{ token: string }>('/oauth/exchange', { method: 'POST', body: JSON.stringify({ code }) }),
+  completeOAuth: (body: JsonBody) => protectedAuthRequest<{ status: string; username: string; token?: string; expires_at?: string; organization_id?: string }>('/oauth/complete', { method: 'POST', body: JSON.stringify(body) }),
   logout: () => protectedAuthRequest<void>('/logout', { method: 'POST' }),
   registrationStatus: () => authRequest<RegistrationSetting>('/registration-status'),
   register: (body: JsonBody) => authRequest<{ username: string; organization_id: string }>('/register', { method: 'POST', body: JSON.stringify(body) }),

@@ -55,7 +55,7 @@ def require_admin(
     grants = db.scalars(
         select(UserPermissionGrant).where(UserPermissionGrant.user_id == user.id)
     ).all()
-    if request.url.path != "/api/v1/auth/me" and user.authorization_status != "active":
+    if request.url.path not in {"/api/v1/auth/me", "/api/v1/auth/oauth/complete"} and user.authorization_status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="account pending authorization")
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         db.add(

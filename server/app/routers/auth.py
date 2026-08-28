@@ -37,6 +37,7 @@ from ..models import (
 from ..permissions import PERMISSION_KEYS, permission_catalog
 from ..schemas import (
     LoginRequest,
+    OAuthCompletionRequest,
     OAuthExchangeRequest,
     OAuthProviderCreate,
     OAuthProviderUpdate,
@@ -650,3 +651,46 @@ def exchange_oauth_code(
     db.delete(exchange)
     db.commit()
     return {"token": token}
+
+
+@router.post("/oauth/complete")
+def complete_oauth_signup(
+    payload: OAuthCompletionRequest,
+    principal: Annotated[dict, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> dict:
+    if principal.get("authorization_status") != "pending":
+        raise HTTPException(status_code=400, detail="OAuth account is already active")
+    user = db.get(AdminUser, principal["id"])
+    identity = db.scalar(select(OAuthIdentity).where(OAuthIdentity.user_id == principal["id"]))
+    if user is None or identity is None:
+        raise HTTPException(status_code=404, detail="OAuth account not found")
+    if payload.mode == "bind":
+        target = db.scalar(select(AdminUser).where(AdminUser.username == payload.username))
+        if target is None or target.id == user.id or target.disabled or not verify_password(payload.password, target.password_hash):
+            raise HTTPException(status_code=401, detail="invalid existing account credentials")
+        identity.user_id = target.id
+        db.query(AdminSession).filter(AdminSession.user_id == user.id).update({"user_id": target.id})
+        db.delete(user)
+        token, expires_at = _create_session(target, db)
+        db.commit()
+        return {"status": "active", "username": target.username, "token": token, "expires_at": utc_iso(expires_at)}
+    if not _registration_enabled(db):
+        raise HTTPException(status_code=403, detail="registration is disabled")
+    if not payload.organization_name:
+        raise HTTPException(status_code=422, detail="organization_name is required for registration")
+    if db.scalar(select(AdminUser).where(AdminUser.username == payload.username)):
+        raise HTTPException(status_code=409, detail="username exists")
+    if db.scalar(select(Organization).where(Organization.name == payload.organization_name)):
+        raise HTTPException(status_code=409, detail="organization exists")
+    organization = Organization(name=payload.organization_name)
+    db.add(organization)
+    user.username = payload.username
+    user.password_hash = hash_password(payload.password)
+    user.role = "admin"
+    user.authorization_status = "active"
+    db.flush()
+    db.add(OrganizationMembership(user_id=user.id, organization_id=organization.id))
+    db.add(AuditLog(actor=user.username, action="oauth_register", resource=f"organization:{organization.name}"))
+    db.commit()
+    return {"status": "active", "username": user.username, "organization_id": organization.id}

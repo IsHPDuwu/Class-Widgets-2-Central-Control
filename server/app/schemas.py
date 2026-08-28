@@ -489,3 +489,10 @@ class OAuthProviderUpdate(BaseModel):
 
 class OAuthExchangeRequest(BaseModel):
     code: str = Field(min_length=20, max_length=500)
+
+
+class OAuthCompletionRequest(BaseModel):
+    mode: Literal["register", "bind"]
+    username: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=12, max_length=200)
+    organization_name: str | None = Field(default=None, min_length=1, max_length=120)

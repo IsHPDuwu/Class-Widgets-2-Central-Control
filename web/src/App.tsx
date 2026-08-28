@@ -87,9 +87,11 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
   const [connected, setConnected] = useState(false)
   const [notice, setNotice] = useState<Notice>(null)
   const [principal, setPrincipal] = useState<Principal | null>(null)
+  const [oauthPending, setOauthPending] = useState(false)
 
   const refresh = useCallback(async () => {
     if (!getAdminKey() && !getSessionToken()) { setConnected(false); return }
+    if (oauthPending) { setConnected(true); return }
     setLoading(true)
     try {
       const [nextPrincipal, nextOrganizations] = await Promise.all([api.me(), api.organizations()])
@@ -122,7 +124,7 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
     } finally {
       setLoading(false)
     }
-  }, [organizationId])
+  }, [oauthPending, organizationId])
 
   useEffect(() => {
     const parameters = new URLSearchParams(window.location.search)
@@ -132,7 +134,13 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
         setSessionToken(result.token)
         setAdminKey('')
         window.history.replaceState({}, '', parameters.get('return_path') || '/')
-        void refresh()
+        void api.me().then((nextPrincipal) => {
+          setPrincipal(nextPrincipal)
+          if (nextPrincipal.authorization_status === 'pending') {
+            setOauthPending(true)
+            setConnected(true)
+          } else void refresh()
+        })
       }).catch((error) => setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'OIDC 登录失败' }))
     }
   }, [])
@@ -183,6 +191,7 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
     : NAV_ITEMS
 
   if (!connected) return <LoginPage adminKey={adminKey} onAdminKeyChange={updateAdminKey} username={username} password={password} onUsernameChange={setUsername} onPasswordChange={setPassword} onAdminLogin={connect} onTenantLogin={login} loading={loading} onComplete={complete} />
+  if (oauthPending) return <OAuthCompletionPage onComplete={() => { setOauthPending(false); void refresh() }} />
   return <div className="app-shell">
     <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
       <div className="brand"><div className="brand-mark"><img src={centralControlIcon} alt="集控" /></div><div><strong>集控</strong><span>Class Widgets</span></div></div>
@@ -232,6 +241,24 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
 }
 
 void ConnectionPanel_UNUSED_REMOVED
+
+function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
+  const [mode, setMode] = useState<'register' | 'bind'>('register')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [organizationName, setOrganizationName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setLoading(true); setError('')
+    try {
+      const result = await api.completeOAuth({ mode, username: username.trim(), password, ...(mode === 'register' ? { organization_name: organizationName.trim() } : {}) })
+      if (result.token) setSessionToken(result.token)
+      onComplete()
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '操作失败') } finally { setLoading(false) }
+  }
+  return <div className="login-page"><div className="login-banner"><div className="login-banner-copy"><img src={centralControlIcon} alt="Class Widgets" /><strong>Class Widgets</strong><span>完成账号设置</span><p>这是该身份源首次登录，请选择账号处理方式。</p></div></div><div className="login-card"><div className="login-heading"><h1>完成 OAuth 登录</h1><p>未找到对应的集控账号。</p></div><div className="segmented login-segment"><button type="button" className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}>注册新账号</button><button type="button" className={mode === 'bind' ? 'selected' : ''} onClick={() => setMode('bind')}>绑定已有账号</button></div>{error && <div className="notice error">{error}</div>}<form onSubmit={submit}><label>集控用户名<input value={username} onChange={(event) => setUsername(event.target.value)} placeholder={mode === 'bind' ? '输入已有用户名' : '设置用户名'} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'bind' ? '验证已有密码' : '至少 12 个字符'} /></label>{mode === 'register' && <label>新建组织名称<input value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" /></label>}<Button appearance="primary" type="submit" disabled={loading || !username.trim() || password.length < 12 || (mode === 'register' && !organizationName.trim())}>{mode === 'bind' ? '验证并绑定' : '创建账号并继续'}</Button></form></div></div>
+}
 
 function TenantManagement({ organizations, groups, devices, onComplete }: { organizations: Organization[]; groups: Group[]; devices: Device[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const [users, setUsers] = useState<AdminUser[]>([])

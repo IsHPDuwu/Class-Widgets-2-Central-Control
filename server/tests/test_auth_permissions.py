@@ -5,7 +5,14 @@ from unittest.mock import patch
 
 from app.config import Settings
 from app.database import SessionLocal
-from app.models import OAuthExchangeCode, OAuthProvider, utc_now
+from app.models import (
+    AdminSession,
+    AdminUser,
+    OAuthExchangeCode,
+    OAuthIdentity,
+    OAuthProvider,
+    utc_now,
+)
 from app.routers.auth import _discovery
 from app.security import encrypt_secret, generate_secret, hash_secret
 
@@ -87,6 +94,43 @@ def test_pending_account_can_only_read_own_principal(client, admin_headers):
         json={"username": "pending-member", "password": "strong-password-123"},
     )
     assert login_response.status_code == 403
+
+
+def test_oauth_registration_is_rejected_when_public_registration_is_disabled(client):
+    with SessionLocal() as db:
+        provider = OAuthProvider(
+            key="test-provider",
+            name="Test Provider",
+            issuer_url="https://issuer.example",
+            client_id="client",
+            client_secret_encrypted="encrypted",
+        )
+        db.add(provider)
+        db.flush()
+        user = AdminUser(
+            username="oidc-pending",
+            password_hash=None,
+            role="viewer",
+            authorization_status="pending",
+        )
+        db.add(user)
+        db.flush()
+        db.add(OAuthIdentity(provider_id=provider.id, user_id=user.id, issuer="https://issuer.example", subject="subject-1"))
+        session_token = generate_secret()
+        db.add(AdminSession(user_id=user.id, token_hash=hash_secret(session_token), expires_at=utc_now() + timedelta(hours=1)))
+        db.commit()
+
+    response = client.post(
+        "/api/v1/auth/oauth/complete",
+        headers={"Authorization": f"Bearer {session_token}"},
+        json={
+            "mode": "register",
+            "username": "new-account",
+            "password": "strong-password-123",
+            "organization_name": "New School",
+        },
+    )
+    assert response.status_code == 403
 
 
 def test_oauth_exchange_code_is_single_use(client):
