@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Add24Regular,
+  ArrowDownload24Regular,
   Copy24Regular,
   Delete24Regular,
   ArrowUpload24Regular,
@@ -93,6 +94,18 @@ export function ScheduleWorkspace({ organizationId, groups, onComplete }: Props)
   async function importSchedule(file: File | undefined) {
     if (!file) return
     try {
+      if (/\.ya?ml$/i.test(file.name)) {
+        const anchorDate = schedule.meta.startDate
+        const result = await api.importCses(await file.text(), anchorDate)
+        setEditingId(null)
+        setName(result.name || file.name.replace(/\.ya?ml$/i, ''))
+        setSchedule(normalizeSchedule(structuredClone(result.schedule) as unknown as Schedule))
+        setPublishGroups([])
+        setTab('timeline')
+        const warnings = result.warnings.length ? `；注意：${result.warnings.join('；')}` : ''
+        onComplete(`已按开学日期 ${anchorDate} 导入 CSES 课表“${result.name}”${warnings}`)
+        return
+      }
       const imported = JSON.parse(await file.text()) as Record<string, unknown>
       const candidate = ('schedule' in imported ? imported.schedule : imported) as Partial<Schedule>
       if (!candidate.meta || !Array.isArray(candidate.subjects) || !Array.isArray(candidate.days) || !Array.isArray(candidate.overrides)) {
@@ -107,6 +120,22 @@ export function ScheduleWorkspace({ organizationId, groups, onComplete }: Props)
       onComplete(`已导入课表“${file.name}”，保存后生效`)
     } catch (error) {
       onComplete(error instanceof Error ? error.message : '课表导入失败', 'error')
+    }
+  }
+  async function exportCses() {
+    try {
+      const scheduleName = name.trim() || '课表'
+      const result = await api.exportCses(scheduleName, normalizeSchedule(schedule))
+      const url = URL.createObjectURL(new Blob([result.content], { type: 'application/x-yaml' }))
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${scheduleName}.yaml`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      const warnings = result.warnings.length ? `，注意：${result.warnings.join('；')}` : ''
+      onComplete(`已导出 CSES 文件“${scheduleName}.yaml”${warnings}`)
+    } catch (error) {
+      onComplete(error instanceof Error ? error.message : 'CSES 导出失败', 'error')
     }
   }
   async function save() {
@@ -141,7 +170,7 @@ export function ScheduleWorkspace({ organizationId, groups, onComplete }: Props)
       <div className="resource-nav">{records.map((record) => <article className={editingId === record.id ? 'selected' : ''} key={record.id}><button className="resource-main" onClick={() => edit(record)}><strong>{record.name}</strong><span>r{record.revision} · {record.group_ids.length ? `${record.group_ids.length} 个分组` : '草稿'}</span></button><button title="克隆" onClick={() => void clone(record)}><Copy24Regular /></button></article>)}</div>
     </section>
     <section className="schedule-editor form-section">
-      <div className="editor-commandbar"><div><input aria-label="课表名称" value={name} onChange={(event) => setName(event.target.value)} /><span>{editingId ? '编辑现有课表；保存时创建新修订' : '尚未保存的课表'}</span></div><label className="import-button"><ArrowUpload24Regular />导入 JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importSchedule(event.target.files?.[0]); event.target.value = '' }} /></label><button onClick={() => void save()}><Save24Regular />仅保存</button><button className="primary" disabled={!publishGroups.length} onClick={() => void saveAndPublish()}><Send24Regular />保存并发布</button></div>
+      <div className="editor-commandbar"><div><input aria-label="课表名称" value={name} onChange={(event) => setName(event.target.value)} /><span>{editingId ? '编辑现有课表；保存时创建新修订' : '尚未保存的课表'}</span></div><label className="import-button"><ArrowUpload24Regular />导入 JSON / CSES<input type="file" accept="application/json,.json,.yaml,.yml" onChange={(event) => { void importSchedule(event.target.files?.[0]); event.target.value = '' }} /></label><button onClick={() => void exportCses()}><ArrowDownload24Regular />导出 CSES</button><button onClick={() => void save()}><Save24Regular />仅保存</button><button className="primary" disabled={!publishGroups.length} onClick={() => void saveAndPublish()}><Send24Regular />保存并发布</button></div>
       <div className="meta-strip"><label>开学日期<input type="date" value={schedule.meta.startDate} onChange={(event) => setSchedule({ ...schedule, meta: { ...schedule.meta, startDate: event.target.value } })} /></label><label>最大周循环<input type="number" min={1} max={52} value={schedule.meta.maxWeekCycle} onChange={(event) => setSchedule({ ...schedule, meta: { ...schedule.meta, maxWeekCycle: Number(event.target.value) } })} /></label><fieldset><legend>发布目标</legend>{checks(groups, publishGroups, setPublishGroups)}</fieldset></div>
       <div className="editor-tabs"><button className={tab === 'timeline' ? 'active' : ''} onClick={() => setTab('timeline')}>1. 时间线</button><button className={tab === 'schedule' ? 'active' : ''} onClick={() => setTab('schedule')}>2. 课表</button><button className={tab === 'subjects' ? 'active' : ''} onClick={() => setTab('subjects')}>3. 科目</button></div>
       {tab === 'timeline' && <TimelineEditor schedule={schedule} setSchedule={setSchedule} />}

@@ -2,3 +2,5 @@
 .venv/
 
 client-plugin/
+
+.zcode/

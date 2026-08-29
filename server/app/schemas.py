@@ -266,6 +266,16 @@ class SchedulePublish(BaseModel):
     group_ids: list[str] = Field(default_factory=list)
 
 
+class CsesImportRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=1_000_000)
+    start_date: date
+
+
+class CsesExportRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    schedule: SchedulePayload
+
+
 class PolicyPublish(BaseModel):
     organization_id: str
     name: str = Field(min_length=1, max_length=120)

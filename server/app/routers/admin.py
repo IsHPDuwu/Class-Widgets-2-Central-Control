@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Annotated
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -32,6 +33,8 @@ from ..schemas import (
     ClassSwapCreate,
     ClassSwapPrepare,
     CommandCreate,
+    CsesExportRequest,
+    CsesImportRequest,
     GroupAssignment,
     GroupCreate,
     OrganizationCreate,
@@ -45,6 +48,7 @@ from ..schemas import (
     RegistrationSetting,
 )
 from ..security import generate_secret, hash_secret
+from ..services.cses import cses_to_schedule, schedule_to_cses
 
 router = APIRouter(tags=["admin"])
 
@@ -537,6 +541,31 @@ def publish_schedule(
         group.schedule_revision_id = revision.id
     db.commit()
     return {"id": revision.id, "revision": revision.revision}
+
+
+@router.post("/schedules/import-cses")
+def import_cses_schedule(
+    payload: CsesImportRequest,
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    try:
+        name, schedule, warnings = cses_to_schedule(payload.content, payload.start_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"name": name, "schedule": schedule.model_dump(mode="json"), "warnings": warnings}
+
+
+@router.post("/schedules/export-cses")
+def export_cses_schedule(
+    payload: CsesExportRequest,
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    try:
+        document, warnings = schedule_to_cses(payload.name, payload.schedule)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    content = yaml.safe_dump(document, allow_unicode=True, sort_keys=False)
+    return {"content": content, "warnings": warnings}
 
 
 @router.get("/schedules")
