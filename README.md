@@ -28,6 +28,8 @@
 - 一个可安全保存密钥的部署环境
 - 反向代理和 HTTPS（推荐使用 Caddy、Nginx 或 Traefik）
 
+服务镜像会通过 `server/pyproject.toml` 安装 Python 包；其中 setuptools 已显式配置为只打包 `app`，Alembic 的 `migrations` 目录作为镜像中的迁移脚本保留，不参与 Python wheel 包发现。
+
 ## 快速启动：本地开发
 
 ### 1. 启动后端
