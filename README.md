@@ -168,6 +168,15 @@ OIDC Provider 可在“平台管理”中动态添加。Provider 后台应将回
 
 可使用 Python 生成 Fernet 密钥：`from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())`。密钥丢失后，现有 Provider Secret 将无法解密；不要提交或随意轮换该值。
 
+## 课表导入与导出（CSES）
+
+Web 管理后台的课表工作区支持 [CSES](https://github.com/SmartTeachCN/CSES)（The Course Schedule Exchange Schema，v2）格式的课表文件导入与导出：
+
+- 导入：选择 `.yaml` / `.yml` 文件后，服务端会转换为集控课表格式并载入编辑器，转换前可先在“开学日期”中设定周期锚点（CSES 周期的第 1 天所在日期），转换产生的提示（如单双周映射、非整周周期折算）会显示在通知中。
+- 导出：编辑器命令栏“导出 CSES”将当前课表生成 CSES YAML 文件下载；固定日期日程、课间/活动条目、周六周日课程等 CSES 无法表达的内容会被跳过并在通知中说明。
+
+对应的服务端接口为 `POST /api/v1/admin/schedules/import-cses` 与 `POST /api/v1/admin/schedules/export-cses`，均为无状态转换，不读取或写入数据库。
+
 ## 数据库迁移
 
 执行最新迁移：

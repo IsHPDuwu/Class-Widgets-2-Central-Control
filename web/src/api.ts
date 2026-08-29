@@ -242,6 +242,8 @@ export const api = {
       expires_in_minutes: expiresInMinutes,
     }),
   publishSchedule: (body: JsonBody) => post<{ id: string; revision: number }>('/schedules', body),
+  importCses: (content: string, startDate: string) => post<{ name: string; schedule: Record<string, unknown>; warnings: string[] }>('/schedules/import-cses', { content, start_date: startDate }),
+  exportCses: (name: string, schedule: JsonBody) => post<{ content: string; warnings: string[] }>('/schedules/export-cses', { name, schedule }),
   publishPolicy: (body: JsonBody) => post<{ id: string; revision: number }>('/policies', body),
   updateSchedule: (id: string, body: JsonBody) => put<{ id: string; revision: number; group_ids: string[] }>(`/schedules/${id}`, body),
   updatePolicy: (id: string, body: JsonBody) => put<{ id: string; revision: number; group_ids: string[] }>(`/policies/${id}`, body),
