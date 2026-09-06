@@ -23,6 +23,9 @@ import {
 import { Button, Checkbox, Select, Tab, TabList } from '@fluentui/react-components'
 import { api, getAdminKey, getSessionToken, setAdminKey, setSessionToken, type AdminUser, type CommandRecord, type Device, type DiagnosticDetail, type Group, type OAuthProviderPublic, type Organization, type Principal } from './api'
 import { ScheduleWorkspace } from './ScheduleWorkspace'
+import { TimelineWorkspace } from './TimelineWorkspace'
+import { CrossGroupScheduleWorkspace } from './CrossGroupScheduleWorkspace'
+import { CourseWorkspace } from './CourseWorkspace'
 import { ConfigWorkspace } from './ConfigWorkspace'
 import { AutomationWorkspace } from './AutomationWorkspace'
 import { ClassSwapWorkspace } from './ClassSwapWorkspace'
@@ -32,7 +35,7 @@ import centralControlIcon from './assets/cw2-jikong.png'
 type ThemeMode = 'system' | 'light' | 'dark'
 import './App.css'
 
-type View = 'overview' | 'devices' | 'groups' | 'schedule' | 'class-swap' | 'policy' | 'commands' | 'automation' | 'logs' | 'tenants'
+type View = 'overview' | 'devices' | 'groups' | 'schedule' | 'timelines' | 'courses' | 'cross-schedule' | 'class-swap' | 'policy' | 'commands' | 'automation' | 'logs' | 'tenants'
 type Notice = { tone: 'success' | 'error'; message: string } | null
 
 const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Desktop24Regular }> = [
@@ -40,6 +43,9 @@ const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Desktop24Regular 
   { id: 'devices', label: '设备', icon: Desktop24Regular },
   { id: 'groups', label: '分组与配对', icon: Organization24Regular },
   { id: 'schedule', label: '课表发布', icon: CalendarLtr24Regular },
+  { id: 'timelines', label: '时间线', icon: CalendarLtr24Regular },
+  { id: 'courses', label: '课表课程', icon: DocumentBulletList24Regular },
+  { id: 'cross-schedule', label: '按天排课', icon: CalendarSync24Regular },
   { id: 'class-swap', label: '临时换课', icon: CalendarSync24Regular },
   { id: 'policy', label: '策略', icon: ShieldLock24Regular },
   { id: 'commands', label: '命令', icon: Code24Regular },
@@ -52,6 +58,9 @@ const VIEW_TITLES: Record<View, [string, string]> = {
   devices: ['设备', '检查终端状态、版本和配置修订'],
   groups: ['分组与配对', '组织终端并生成一次性配对码'],
   schedule: ['课表发布', '校验并向选定分组发布课表'],
+  timelines: ['时间线', '维护可复用的上课时间结构'],
+  courses: ['课表课程', '配置课表可使用的课程信息'],
+  'cross-schedule': ['按天排课', '按公共时间线为多个分组逐天安排课程'],
   'class-swap': ['临时换课', '获取客户端单双周课表并下发换课事件'],
   policy: ['策略', '统一锁定终端的受管设置'],
   commands: ['命令', '向分组或单台设备下发受限操作'],
@@ -213,6 +222,9 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
         {view === 'devices' && <DevicesView devices={devices} groups={groups} onComplete={complete} />}
         {view === 'groups' && <GroupsView organizationId={organizationId} groups={groups} onComplete={complete} />}
         {view === 'schedule' && <ScheduleWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
+        {view === 'timelines' && <TimelineWorkspace organizationId={organizationId} onComplete={complete} />}
+        {view === 'courses' && <CourseWorkspace organizationId={organizationId} onComplete={complete} />}
+        {view === 'cross-schedule' && <CrossGroupScheduleWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
         {view === 'class-swap' && <ClassSwapWorkspace organizationId={organizationId} groups={groups} devices={devices} onComplete={complete} />}
         {view === 'policy' && <ConfigWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
         {view === 'commands' && <CommandsView organizationId={organizationId} groups={groups} devices={devices} onComplete={complete} />}

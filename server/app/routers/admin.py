@@ -16,6 +16,7 @@ from ..models import (
     Command,
     CommandAcknowledgement,
     ClassSwapSession,
+    CourseResource,
     Device,
     DeviceScheduleSnapshot,
     DeviceGroup,
@@ -25,6 +26,8 @@ from ..models import (
     PolicyRevision,
     ScheduleRevision,
     SystemSetting,
+    TimelineResource,
+    seed_default_courses,
     utc_iso,
     utc_now,
 )
@@ -42,11 +45,192 @@ from ..schemas import (
     ResourceClone,
     SchedulePublish,
     ScheduleUpdate,
+    TimelineResourceCreate,
+    TimelineResourceUpdate,
+    CourseResourceCreate,
+    CourseResourceUpdate,
     RegistrationSetting,
 )
 from ..security import generate_secret, hash_secret
 
 router = APIRouter(tags=["admin"])
+
+
+@router.get("/courses")
+def list_courses(
+    organization_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> list[dict]:
+    require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.schedules.view", organization_id=organization_id)
+    courses = db.scalars(
+        select(CourseResource)
+        .where(CourseResource.organization_id == organization_id)
+        .order_by(CourseResource.name)
+    ).all()
+    return [{
+        "id": item.id,
+        "organization_id": item.organization_id,
+        "name": item.name,
+        "simplifiedName": item.simplified_name,
+        "teacher": item.teacher,
+        "icon": item.icon,
+        "color": item.color,
+        "location": item.location,
+        "isLocalClassroom": item.is_local_classroom,
+        "created_at": utc_iso(item.created_at),
+        "updated_at": utc_iso(item.updated_at),
+    } for item in courses]
+
+
+@router.post("/courses", status_code=status.HTTP_201_CREATED)
+def create_course(
+    payload: CourseResourceCreate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    require_organization_access(payload.organization_id, principal, db)
+    require_permission(principal, "organization.schedules.create", organization_id=payload.organization_id)
+    course = CourseResource(
+        organization_id=payload.organization_id,
+        name=payload.course.name,
+        simplified_name=payload.course.simplifiedName or "",
+        teacher=payload.course.teacher or "",
+        icon=payload.course.icon or "",
+        color=payload.course.color or "",
+        location=payload.course.location or "",
+        is_local_classroom=payload.course.isLocalClassroom,
+    )
+    db.add(course)
+    db.commit()
+    return {"id": course.id, **payload.course.model_dump(mode="json")}
+
+
+@router.put("/courses/{course_id}")
+def update_course(
+    course_id: str,
+    payload: CourseResourceUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    course = db.get(CourseResource, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="course not found")
+    require_organization_access(course.organization_id, principal, db)
+    require_permission(principal, "organization.schedules.update", organization_id=course.organization_id)
+    value = payload.course
+    course.name = value.name
+    course.simplified_name = value.simplifiedName or ""
+    course.teacher = value.teacher or ""
+    course.icon = value.icon or ""
+    course.color = value.color or ""
+    course.location = value.location or ""
+    course.is_local_classroom = value.isLocalClassroom
+    course.updated_at = utc_now()
+    db.commit()
+    return {"id": course.id, **value.model_dump(mode="json")}
+
+
+@router.delete("/courses/{course_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_course(
+    course_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> None:
+    course = db.get(CourseResource, course_id)
+    if course is None:
+        raise HTTPException(status_code=404, detail="course not found")
+    require_organization_access(course.organization_id, principal, db)
+    require_permission(principal, "organization.schedules.delete", organization_id=course.organization_id)
+    revisions = db.scalars(select(ScheduleRevision).where(ScheduleRevision.organization_id == course.organization_id)).all()
+    if any(course.id in {subject.get("id") for subject in item.data.get("subjects", [])} for item in revisions):
+        raise HTTPException(status_code=409, detail="course is referenced by a schedule")
+    db.delete(course)
+    db.commit()
+
+
+@router.get("/timelines")
+def list_timelines(
+    organization_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> list[dict]:
+    require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.timelines.view", organization_id=organization_id)
+    items = db.scalars(
+        select(TimelineResource)
+        .where(TimelineResource.organization_id == organization_id)
+        .order_by(TimelineResource.name)
+    ).all()
+    return [
+        {
+            "id": item.id,
+            "organization_id": item.organization_id,
+            "name": item.name,
+            "timeline": item.data,
+            "created_at": utc_iso(item.created_at),
+            "updated_at": utc_iso(item.updated_at),
+        }
+        for item in items
+    ]
+
+
+@router.post("/timelines", status_code=status.HTTP_201_CREATED)
+def create_timeline(
+    payload: TimelineResourceCreate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    require_organization_access(payload.organization_id, principal, db)
+    require_permission(principal, "organization.timelines.create", organization_id=payload.organization_id)
+    timeline = TimelineResource(
+        organization_id=payload.organization_id,
+        name=payload.timeline.name,
+        data=payload.timeline.model_dump(mode="json", exclude={"name"}),
+    )
+    db.add(timeline)
+    db.commit()
+    return {"id": timeline.id, "name": timeline.name, "timeline": timeline.data}
+
+
+@router.put("/timelines/{timeline_id}")
+def update_timeline(
+    timeline_id: str,
+    payload: TimelineResourceUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    timeline = db.get(TimelineResource, timeline_id)
+    if timeline is None:
+        raise HTTPException(status_code=404, detail="timeline not found")
+    require_organization_access(timeline.organization_id, principal, db)
+    require_permission(principal, "organization.timelines.update", organization_id=timeline.organization_id)
+    timeline.name = payload.timeline.name
+    timeline.data = payload.timeline.model_dump(mode="json", exclude={"name"})
+    timeline.updated_at = utc_now()
+    db.commit()
+    return {"id": timeline.id, "name": timeline.name, "timeline": timeline.data}
+
+
+@router.delete("/timelines/{timeline_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_timeline(
+    timeline_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> None:
+    timeline = db.get(TimelineResource, timeline_id)
+    if timeline is None:
+        raise HTTPException(status_code=404, detail="timeline not found")
+    require_organization_access(timeline.organization_id, principal, db)
+    require_permission(principal, "organization.timelines.delete", organization_id=timeline.organization_id)
+    references = db.scalars(
+        select(ScheduleRevision).where(ScheduleRevision.organization_id == timeline.organization_id)
+    ).all()
+    if any(timeline.id in (item.data.get("timelineIds") or []) for item in references):
+        raise HTTPException(status_code=409, detail="timeline is referenced by a schedule")
+    db.delete(timeline)
+    db.commit()
 
 
 def _next_command_cursor(db: Session) -> int:
@@ -178,6 +362,34 @@ def _require_schedule_access(
     return revision
 
 
+def _validate_schedule_timelines(
+    schedule,
+    organization_id: str,
+    db: Session,
+) -> None:
+    timeline_ids = set(schedule.timelineIds)
+    if not timeline_ids:
+        return
+    timelines = db.scalars(
+        select(TimelineResource).where(
+            TimelineResource.organization_id == organization_id,
+            TimelineResource.id.in_(timeline_ids),
+        )
+    ).all()
+    if len(timelines) != len(timeline_ids):
+        raise HTTPException(status_code=400, detail="schedule references an unknown timeline")
+    entries_by_timeline = {
+        timeline.id: {entry.get("id") for entry in timeline.data.get("entries", [])}
+        for timeline in timelines
+    }
+    for assignment in schedule.assignments:
+        timeline_id = assignment.timelineId
+        if timeline_id not in entries_by_timeline:
+            raise HTTPException(status_code=400, detail="assignment references an unselected timeline")
+        if assignment.entryId not in entries_by_timeline[timeline_id]:
+            raise HTTPException(status_code=400, detail="assignment references an unknown timeline entry")
+
+
 def _require_policy_access(
     policy_id: str,
     principal: dict,
@@ -201,6 +413,8 @@ def create_organization(
     require_permission(principal, "platform.organizations.manage")
     organization = Organization(name=payload.name)
     db.add(organization)
+    db.flush()
+    seed_default_courses(db, organization.id)
     db.commit()
     return {"id": organization.id, "name": organization.name}
 
@@ -515,6 +729,7 @@ def publish_schedule(
 ) -> dict:
     require_organization_access(payload.organization_id, principal, db)
     require_permission(principal, "organization.schedules.create", organization_id=payload.organization_id)
+    _validate_schedule_timelines(payload.schedule, payload.organization_id, db)
     latest = db.scalar(
         select(func.max(ScheduleRevision.revision)).where(
             ScheduleRevision.organization_id == payload.organization_id
@@ -602,6 +817,7 @@ def update_schedule(
     principal: Annotated[dict, Depends(require_admin)],
 ) -> dict:
     original = _require_schedule_access(schedule_id, principal, db, "organization.schedules.update")
+    _validate_schedule_timelines(payload.schedule, original.organization_id, db)
     latest = db.scalar(
         select(func.max(ScheduleRevision.revision)).where(
             ScheduleRevision.organization_id == original.organization_id

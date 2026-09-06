@@ -1,0 +1,21 @@
+import { useEffect, useState } from 'react'
+import { Add24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
+import { Button, Card, CardHeader, Checkbox, Field, Input } from '@fluentui/react-components'
+import { api, type CourseRecord } from './api'
+
+type Props = { organizationId: string; onComplete: (message: string, tone?: 'success' | 'error') => void }
+type Course = Omit<CourseRecord, 'organization_id' | 'created_at' | 'updated_at'>
+
+export function CourseWorkspace({ organizationId, onComplete }: Props) {
+  const [courses, setCourses] = useState<CourseRecord[]>([])
+  const [selectedId, setSelectedId] = useState('')
+  const [draft, setDraft] = useState<Course>({ id: crypto.randomUUID(), name: '新课程', isLocalClassroom: true })
+  async function load() { if (!organizationId) return; try { const next = await api.courses(organizationId); setCourses(next); if (!selectedId && next[0]) open(next[0]) } catch { /* parent handles authentication failures */ } }
+  useEffect(() => { void load() }, [organizationId])
+  function open(course: CourseRecord) { setSelectedId(course.id); setDraft({ id: course.id, name: course.name, simplifiedName: course.simplifiedName, teacher: course.teacher, icon: course.icon, color: course.color, location: course.location, isLocalClassroom: course.isLocalClassroom }) }
+  function reset() { setSelectedId(''); setDraft({ id: crypto.randomUUID(), name: '新课程', isLocalClassroom: true }) }
+  function update(patch: Partial<Course>) { setDraft((value) => ({ ...value, ...patch })) }
+  async function save() { try { const result = selectedId ? await api.updateCourse(selectedId, { course: draft }) : await api.createCourse({ organization_id: organizationId, course: draft }); setSelectedId(result.id); open(result); onComplete('课表课程已保存'); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '保存课程失败', 'error') } }
+  async function remove() { if (!selectedId || !window.confirm(`确定删除课程“${draft.name}”？`)) return; try { await api.deleteCourse(selectedId); onComplete('课表课程已删除'); reset(); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '删除课程失败', 'error') } }
+  return <div className="course-resource-workspace"><Card className="resource-sidebar"><CardHeader header={<strong>课表课程</strong>} action={<Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>} /><div className="resource-nav">{courses.map((course) => <Button className={selectedId === course.id ? 'selected' : ''} appearance="subtle" key={course.id} onClick={() => open(course)}><span><strong>{course.name}</strong><small>{course.teacher || course.location || '未填写附加信息'}</small></span></Button>)}</div></Card><Card className="form-section course-resource-editor"><div className="editor-commandbar"><Field label="课程名称"><Input value={draft.name} onChange={(_, data) => update({ name: data.value })} /></Field><div className="form-actions"><Button appearance="secondary" icon={<Delete24Regular />} disabled={!selectedId} onClick={() => void remove()}>删除</Button><Button appearance="primary" icon={<Save24Regular />} onClick={() => void save()}>保存</Button></div></div><div className="subject-grid"><Card style={{ borderTopColor: draft.color ?? '#13b4d6' }}><div className="course-form-grid"><Field label="名称"><Input value={draft.name} onChange={(_, data) => update({ name: data.value })} /></Field><Field label="简称"><Input value={draft.simplifiedName ?? ''} onChange={(_, data) => update({ simplifiedName: data.value || undefined })} /></Field><Field label="教师"><Input value={draft.teacher ?? ''} onChange={(_, data) => update({ teacher: data.value || undefined })} /></Field><Field label="教室"><Input value={draft.location ?? ''} onChange={(_, data) => update({ location: data.value || undefined })} /></Field><Field label="图标"><Input value={draft.icon ?? ''} onChange={(_, data) => update({ icon: data.value || undefined })} /></Field><Field label="颜色" hint="例如 #13b4d6"><Input value={draft.color ?? '#13b4d6'} onChange={(_, data) => update({ color: data.value })} /></Field></div><Checkbox checked={draft.isLocalClassroom} onChange={(_, data) => update({ isLocalClassroom: !!data.checked })} label="本班教室课程" /></Card></div></Card></div>
+}

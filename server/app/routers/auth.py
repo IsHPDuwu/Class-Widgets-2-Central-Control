@@ -31,6 +31,7 @@ from ..models import (
     OrganizationMembership,
     SystemSetting,
     UserPermissionGrant,
+    seed_default_courses,
     utc_iso,
     utc_now,
 )
@@ -209,6 +210,7 @@ def register(payload: RegistrationRequest, db: Annotated[Session, Depends(get_db
     organization = Organization(name=payload.organization_name)
     db.add(organization)
     db.flush()
+    seed_default_courses(db, organization.id)
     user = AdminUser(username=payload.username, password_hash=hash_password(payload.password), role="admin")
     db.add(user)
     db.flush()
@@ -690,6 +692,7 @@ def complete_oauth_signup(
     user.role = "admin"
     user.authorization_status = "active"
     db.flush()
+    seed_default_courses(db, organization.id)
     db.add(OrganizationMembership(user_id=user.id, organization_id=organization.id))
     db.add(AuditLog(actor=user.username, action="oauth_register", resource=f"organization:{organization.name}"))
     db.commit()

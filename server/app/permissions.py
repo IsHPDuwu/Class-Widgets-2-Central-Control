@@ -18,6 +18,7 @@ MODULES: tuple[PermissionDefinition, ...] = (
     PermissionDefinition("groups", "分组与配对", "groups", ("view", "create", "update", "delete", "pair"), ("organization", "group")),
     PermissionDefinition("devices", "设备", "devices", ("view", "update", "delete"), ("organization", "group", "device")),
     PermissionDefinition("schedules", "课表", "schedules", ("view", "create", "update", "delete", "publish", "assign")),
+    PermissionDefinition("timelines", "时间线", "timelines", ("view", "create", "update", "delete", "import")),
     PermissionDefinition("class_swaps", "临时换课", "class_swaps", ("view", "execute", "restore"), ("organization", "group", "device")),
     PermissionDefinition("policies", "策略", "policies", ("view", "create", "update", "delete", "publish", "assign")),
     PermissionDefinition("commands", "命令", "commands", ("view", "execute"), ("organization", "group", "device")),

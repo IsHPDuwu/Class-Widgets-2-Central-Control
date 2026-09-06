@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -22,6 +22,41 @@ def utc_iso(value: datetime) -> str:
 
 def new_id() -> str:
     return str(uuid4())
+
+
+# 与桌面端 src/core/utils/subjects.py 保持一致。课程资源主键由数据库生成，
+# 因为同一课程会存在于多个组织中。
+DEFAULT_COURSES: tuple[dict[str, Any], ...] = (
+    {"id": "chinese", "name": "语文", "simplified_name": "语", "icon": "ic_fluent_book_20_regular", "color": "#FF5722", "is_local_classroom": True},
+    {"id": "math", "name": "数学", "simplified_name": "数", "icon": "ic_fluent_ruler_20_regular", "color": "#3F51B5", "is_local_classroom": True},
+    {"id": "english", "name": "英语", "simplified_name": "英", "icon": "ic_fluent_text_list_abc_uppercase_ltr_20_filled", "color": "#2196F3", "is_local_classroom": True},
+    {"id": "politics", "name": "政治", "simplified_name": "政", "icon": "ic_fluent_book_globe_20_regular", "color": "#9C27B0", "is_local_classroom": True},
+    {"id": "history", "name": "历史", "simplified_name": "史", "icon": "ic_fluent_clock_20_regular", "color": "#795548", "is_local_classroom": True},
+    {"id": "physics", "name": "物理", "simplified_name": "物", "icon": "ic_fluent_lightbulb_filament_20_regular", "color": "#00BCD4", "is_local_classroom": True},
+    {"id": "chemistry", "name": "化学", "simplified_name": "化", "icon": "ic_fluent_hexagon_three_20_regular", "color": "#4CAF50", "is_local_classroom": True},
+    {"id": "biology", "name": "生物", "simplified_name": "生", "icon": "ic_fluent_leaf_three_20_regular", "color": "#8BC34A", "is_local_classroom": True},
+    {"id": "geography", "name": "地理", "simplified_name": "地", "icon": "ic_fluent_earth_20_regular", "color": "#009688", "is_local_classroom": True},
+    {"id": "music", "name": "音乐", "simplified_name": "音", "icon": "ic_fluent_music_note_2_20_regular", "color": "#E91E63", "is_local_classroom": True},
+    {"id": "art", "name": "美术", "simplified_name": "美", "icon": "ic_fluent_draw_shape_20_regular", "color": "#F44336", "is_local_classroom": True},
+    {"id": "psychology", "name": "心理", "simplified_name": "心", "icon": "ic_fluent_brain_sparkle_20_regular", "color": "#FF9800", "is_local_classroom": True},
+    {"id": "pe", "name": "体育", "simplified_name": "体", "icon": "ic_fluent_person_running_20_regular", "color": "#CDDC39", "is_local_classroom": False},
+    {"id": "it", "name": "信息技术", "simplified_name": "信", "icon": "ic_fluent_laptop_20_regular", "color": "#607D8B", "is_local_classroom": True},
+    {"id": "generaltech", "name": "通用技术", "simplified_name": "通", "icon": "ic_fluent_wrench_settings_20_regular", "color": "#FF9800", "is_local_classroom": True},
+    {"id": "elective", "name": "选修", "simplified_name": "选", "icon": "ic_fluent_sign_out_20_regular", "color": "#9E9E9E", "is_local_classroom": False},
+    {"id": "selfstudy", "name": "自学", "simplified_name": "自", "icon": "ic_fluent_notebook_20_regular", "color": "#607D8B", "is_local_classroom": True},
+    {"id": "club", "name": "社团", "simplified_name": "社", "icon": "ic_fluent_people_team_20_regular", "color": "#673AB7", "is_local_classroom": True},
+    {"id": "classmeeting", "name": "班会", "simplified_name": "班", "icon": "ic_fluent_chat_20_regular", "color": "#3F51B5", "is_local_classroom": True},
+    {"id": "weeklytest", "name": "周测", "simplified_name": "测", "icon": "ic_fluent_clipboard_20_regular", "color": "#FF5722", "is_local_classroom": True},
+)
+
+
+def seed_default_courses(db: Any, organization_id: str) -> None:
+    """幂等补齐一个组织的内置课程。调用方负责最终 commit。"""
+    existing = {name for name in db.scalars(select(CourseResource.name).where(CourseResource.organization_id == organization_id)).all()}
+    for course in DEFAULT_COURSES:
+        if course["name"] in existing:
+            continue
+        db.add(CourseResource(organization_id=organization_id, **{key: value for key, value in course.items() if key != "id"}))
 
 
 class Organization(Base):
@@ -183,6 +218,41 @@ class ScheduleRevision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     __table_args__ = (UniqueConstraint("organization_id", "revision"),)
+
+
+class TimelineResource(Base):
+    """组织级可复用时间线；时间段只描述时间，不绑定课程。"""
+
+    __tablename__ = "timeline_resources"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    data: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+
+class CourseResource(Base):
+    """组织级课表课程配置；课表只在排课引用课程时下发它。"""
+
+    __tablename__ = "course_resources"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    simplified_name: Mapped[str] = mapped_column(String(40), default="")
+    teacher: Mapped[str] = mapped_column(String(120), default="")
+    icon: Mapped[str] = mapped_column(String(200), default="")
+    color: Mapped[str] = mapped_column(String(20), default="")
+    location: Mapped[str] = mapped_column(String(120), default="")
+    is_local_classroom: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
 
 
 class PolicyRevision(Base):

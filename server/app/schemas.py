@@ -30,6 +30,19 @@ class SubjectPayload(BaseModel):
     isLocalClassroom: bool = True
 
 
+class CourseResourcePayload(SubjectPayload):
+    pass
+
+
+class CourseResourceCreate(BaseModel):
+    organization_id: str
+    course: CourseResourcePayload
+
+
+class CourseResourceUpdate(BaseModel):
+    course: CourseResourcePayload
+
+
 class EntryPayload(BaseModel):
     id: str
     type: EntryType
@@ -60,6 +73,25 @@ class TimelinePayload(BaseModel):
     date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
+class TimelineResourcePayload(BaseModel):
+    id: str
+    name: str = Field(min_length=1, max_length=120)
+    entries: list[EntryPayload] = Field(default_factory=list)
+    dayOfWeek: list[Annotated[int, Field(ge=1, le=7)]] | None = None
+    weeks: WeekSelector = None
+    date: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+    @model_validator(mode="after")
+    def validate_entries(self) -> TimelineResourcePayload:
+        entry_ids = [entry.id for entry in self.entries]
+        if len(entry_ids) != len(set(entry_ids)):
+            raise ValueError("timeline entry ids must be unique")
+        for entry in self.entries:
+            # 时间线定义只负责时间结构，课程由课表 assignment 决定。
+            entry.subjectId = None
+        return self
+
+
 class TimetablePayload(BaseModel):
     id: str
     entryId: str
@@ -69,6 +101,15 @@ class TimetablePayload(BaseModel):
     title: str | None = None
     startTime: TimeText | None = None
     endTime: TimeText | None = None
+
+
+class ScheduleAssignmentPayload(BaseModel):
+    id: str
+    timelineId: str
+    entryId: str
+    dayOfWeek: list[Annotated[int, Field(ge=1, le=7)]] | None = None
+    weeks: WeekSelector = None
+    subjectId: str | None = None
 
 
 class ScheduleMetaPayload(BaseModel):
@@ -83,6 +124,8 @@ class SchedulePayload(BaseModel):
     subjects: list[SubjectPayload] = Field(default_factory=list)
     days: list[TimelinePayload] = Field(default_factory=list)
     overrides: list[TimetablePayload] = Field(default_factory=list)
+    timelineIds: list[str] = Field(default_factory=list)
+    assignments: list[ScheduleAssignmentPayload] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_references(self) -> SchedulePayload:
@@ -110,7 +153,21 @@ class SchedulePayload(BaseModel):
             for entry in day.entries:
                 if not entry.title and not entry.subjectId and entry.id not in override_subject_entry_ids:
                     entry.title = uuid4().hex
+        if len(self.timelineIds) != len(set(self.timelineIds)):
+            raise ValueError("timelineIds must be unique")
+        for assignment in self.assignments:
+            if assignment.subjectId and assignment.subjectId not in known_subjects:
+                raise ValueError(f"unknown assignment subjectId: {assignment.subjectId}")
         return self
+
+
+class TimelineResourceCreate(BaseModel):
+    organization_id: str
+    timeline: TimelineResourcePayload
+
+
+class TimelineResourceUpdate(BaseModel):
+    timeline: TimelineResourcePayload
 
 
 class PolicyPayload(BaseModel):

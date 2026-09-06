@@ -56,6 +56,29 @@ export type ScheduleRecord = {
   created_at: string
 }
 
+export type TimelineRecord = {
+  id: string
+  organization_id: string
+  name: string
+  timeline: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type CourseRecord = {
+  id: string
+  organization_id: string
+  name: string
+  simplifiedName?: string
+  teacher?: string
+  icon?: string
+  color?: string
+  location?: string
+  isLocalClassroom: boolean
+  created_at: string
+  updated_at: string
+}
+
 export type ClassSwapPreparation = {
   request_id: string
   device_id: string
@@ -231,6 +254,8 @@ export const api = {
   devices: (organizationId: string) => request<Device[]>(`/devices?organization_id=${encodeURIComponent(organizationId)}`),
   commands: (organizationId: string) => request<CommandRecord[]>(`/commands?organization_id=${encodeURIComponent(organizationId)}`),
   schedules: (organizationId: string) => request<ScheduleRecord[]>(`/schedules?organization_id=${encodeURIComponent(organizationId)}`),
+  timelines: (organizationId: string) => request<TimelineRecord[]>(`/timelines?organization_id=${encodeURIComponent(organizationId)}`),
+  courses: (organizationId: string) => request<CourseRecord[]>(`/courses?organization_id=${encodeURIComponent(organizationId)}`),
   policies: (organizationId: string) => request<PolicyRecord[]>(`/policies?organization_id=${encodeURIComponent(organizationId)}`),
   diagnostics: (organizationId: string) => request<DiagnosticSummary[]>(`/diagnostics?organization_id=${encodeURIComponent(organizationId)}`),
   diagnostic: (id: string) => request<DiagnosticDetail>(`/diagnostics/${id}`),
@@ -246,6 +271,12 @@ export const api = {
   updateSchedule: (id: string, body: JsonBody) => put<{ id: string; revision: number; group_ids: string[] }>(`/schedules/${id}`, body),
   updatePolicy: (id: string, body: JsonBody) => put<{ id: string; revision: number; group_ids: string[] }>(`/policies/${id}`, body),
   cloneSchedule: (id: string, name: string) => post<{ id: string; revision: number }>(`/schedules/${id}/clone`, { name }),
+  createTimeline: (body: JsonBody) => post<{ id: string; name: string; timeline: Record<string, unknown> }>('/timelines', body),
+  updateTimeline: (id: string, body: JsonBody) => put<{ id: string; name: string; timeline: Record<string, unknown> }>(`/timelines/${id}`, body),
+  deleteTimeline: (id: string) => request<void>(`/timelines/${id}`, { method: 'DELETE' }),
+  createCourse: (body: JsonBody) => post<CourseRecord>('/courses', body),
+  updateCourse: (id: string, body: JsonBody) => put<CourseRecord>(`/courses/${id}`, body),
+  deleteCourse: (id: string) => request<void>(`/courses/${id}`, { method: 'DELETE' }),
   clonePolicy: (id: string, name: string) => post<{ id: string; revision: number }>(`/policies/${id}/clone`, { name }),
   assignSchedule: (id: string, groupIds: string[]) => put(`/schedules/${id}/groups`, { group_ids: groupIds }),
   assignPolicy: (id: string, groupIds: string[]) => put(`/policies/${id}/groups`, { group_ids: groupIds }),
