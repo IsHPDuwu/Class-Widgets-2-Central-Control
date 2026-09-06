@@ -24,7 +24,54 @@ export function ScheduleWorkspace({ organizationId, groups, onComplete }: Props)
   function reset() { setEditingId(null); setName('新课表'); setSchedule({ ...emptySchedule(), subjects: courses } as Schedule); setPublishGroups([]); setTab('resources') }
   function edit(record: ScheduleRecord) { setEditingId(record.id); setName(record.name); setSchedule(normalize(structuredClone(record.schedule))); setPublishGroups(record.group_ids); setTab('resources') }
   function chooseTimelines(ids: string[]) { const old = new Map(schedule.days.map((day) => [day.id, day])); const days = timelines.filter((item) => ids.includes(item.id)).flatMap((item) => fromTimeline(item).map((day) => old.get(day.id) ?? day)); setSchedule({ ...schedule, timelineIds: ids, days }) }
-  async function importSchedule(file: File | undefined) { if (!file) return; try { const json = JSON.parse(await file.text()) as Record<string, unknown>; const candidate = ('schedule' in json ? json.schedule : json) as Record<string, unknown>; if (!candidate.meta || !Array.isArray(candidate.subjects) || !Array.isArray(candidate.days)) throw new Error('文件不是有效的 Class Widgets 2 课表'); setEditingId(null); setName(file.name.replace(/\.json$/i, '') || '导入的课表'); setSchedule(normalize(structuredClone(candidate))); setPublishGroups([]); onComplete(`已导入课表“${file.name}”，请检查时间线后保存`) } catch (error) { onComplete(error instanceof Error ? error.message : '课表导入失败', 'error') } }
+  async function importSchedule(file: File | undefined) {
+    if (!file) return
+    try {
+      const json = JSON.parse(await file.text()) as Record<string, unknown>
+      const candidate = ('schedule' in json ? json.schedule : json) as Record<string, unknown>
+      const importedSubjects = Array.isArray(candidate.subjects) ? candidate.subjects as Course[] : []
+      const importedDays = Array.isArray(candidate.days) ? candidate.days as Day[] : []
+      if (!candidate.meta || !importedSubjects.length || !importedDays.length) throw new Error('文件不是有效的 Class Widgets 2 课表')
+
+      // 课程按名称合并：同名课程覆盖现有配置，不同名课程新建。
+      const existingByName = new Map(courses.map((course) => [course.name, course]))
+      const subjectIds = new Map<string, string>()
+      for (const subject of importedSubjects) {
+        const existing = existingByName.get(subject.name)
+        const payload = { ...subject, id: existing?.id ?? subject.id, name: subject.name }
+        const result = existing
+          ? await api.updateCourse(existing.id, { course: payload })
+          : await api.createCourse({ organization_id: organizationId, course: payload })
+        subjectIds.set(subject.id, result.id)
+        existingByName.set(subject.name, result)
+      }
+
+      // 旧课表的时间段提取为一个新的共享时间线，课程绑定全部留给新课表的 assignments。
+      const sourceDay = importedDays.find((day) => day.entries.length) ?? importedDays[0]
+      const timelineEntries = sourceDay.entries.map((entry) => ({ ...entry, subjectId: undefined, title: entry.title }))
+      const timelineDays = [...new Set(importedDays.flatMap((day) => day.dayOfWeek ?? []))]
+      const timeline = await api.createTimeline({
+        organization_id: organizationId,
+        timeline: { id: crypto.randomUUID(), name: `${file.name.replace(/\.json$/i, '') || '导入'} 时间线`, entries: timelineEntries, dayOfWeek: timelineDays.length ? timelineDays : [1, 2, 3, 4, 5], weeks: 'all' },
+      })
+      const timelineId = timeline.id
+      const timelineEntryIds = timelineEntries.map((entry) => entry.id)
+      const days = importedDays.map((day, dayIndex) => ({
+        ...day,
+        timelineId,
+        entries: day.entries.map((entry, entryIndex) => ({ ...entry, id: `${timelineId}:${dayIndex}:${entryIndex}`, sourceEntryId: timelineEntryIds[entryIndex] ?? entry.id, subjectId: entry.subjectId ? subjectIds.get(entry.subjectId) : undefined })),
+      }))
+      const importedSchedule = normalize({ ...candidate, days, timelineIds: [timelineId], subjects: [...existingByName.values()], assignments: [] })
+      const data = { ...importedSchedule, assignments: assignments(importedSchedule) }
+      const result = await api.publishSchedule({ organization_id: organizationId, name: file.name.replace(/\.json$/i, '') || '导入的课表', schedule: data, group_ids: [] })
+      setEditingId(result.id)
+      setName(file.name.replace(/\.json$/i, '') || '导入的课表')
+      setSchedule(importedSchedule)
+      setPublishGroups([])
+      await load()
+      onComplete(`已拆分导入：新建时间线、课表，并合并 ${importedSubjects.length} 个课表课程`)
+    } catch (error) { onComplete(error instanceof Error ? error.message : '课表导入失败', 'error') }
+  }
   async function save(publish = false) { try { const data = { ...schedule, assignments: assignments(schedule) }; const result = editingId ? await api.updateSchedule(editingId, { name: name.trim() || '未命名课表', schedule: data }) : await api.publishSchedule({ organization_id: organizationId, name: name.trim() || '未命名课表', schedule: data, group_ids: [] }); if (publish) await api.assignSchedule(result.id, publishGroups); setEditingId(result.id); onComplete(publish ? `课表 r${result.revision} 已保存并发布` : `课表 r${result.revision} 已保存`); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '保存失败', 'error') } }
   async function clone(record: ScheduleRecord) { try { const result = await api.cloneSchedule(record.id, `${record.name} - 副本`); onComplete(`副本 r${result.revision} 已保存`); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '克隆失败', 'error') } }
   async function publish(record: ScheduleRecord, ids: string[]) { try { await api.assignSchedule(record.id, ids); onComplete(ids.length ? `“${record.name}”已发布到 ${ids.length} 个分组` : `“${record.name}”已取消发布`); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '发布失败', 'error') } }
