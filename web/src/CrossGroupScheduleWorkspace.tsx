@@ -47,6 +47,11 @@ function buildAssignments(schedule: Schedule): Assignment[] {
     .map((entry) => ({ id: `${day.id}:${entry.id}`, timelineId: day.timelineId, entryId: entry.sourceEntryId ?? entry.id, dayOfWeek: day.dayOfWeek, weeks: day.weeks, subjectId: entry.subjectId })))
 }
 
+function assignmentFor(schedule: Schedule, day: Day, entry: Entry, week: number) {
+  const entryId = entry.sourceEntryId ?? entry.id
+  return schedule.assignments.find((item) => item.timelineId === day.timelineId && item.entryId === entryId && (item.dayOfWeek?.includes(day.dayOfWeek?.[0] ?? 0) ?? true) && appliesToWeek(item.weeks, week))
+}
+
 export function CrossGroupScheduleWorkspace({ organizationId, groups, onComplete }: Props) {
   const [timelines, setTimelines] = useState<TimelineRecord[]>([])
   const [records, setRecords] = useState<ScheduleRecord[]>([])
@@ -80,10 +85,14 @@ export function CrossGroupScheduleWorkspace({ organizationId, groups, onComplete
     const record = records.find((item) => item.group_ids.includes(groupId) && (item.schedule.timelineIds as string[] | undefined)?.includes(selectedTimeline.id))
     if (!record) return timelineDays(selectedTimeline, courses)
     const draft = structuredClone(record.schedule) as unknown as Schedule
+    const oldSubjects = Array.isArray((record.schedule as { subjects?: Course[] }).subjects) ? (record.schedule as { subjects: Course[] }).subjects : []
+    const idsByName = new Map(courses.map((course) => [course.name, course.id]))
+    const subjectIdMap = new Map(oldSubjects.map((subject) => [subject.id, idsByName.get(subject.name) ?? subject.id]))
+    draft.days = (draft.days ?? []).map((item) => ({ ...item, entries: item.entries.map((entry) => ({ ...entry, subjectId: entry.subjectId ? subjectIdMap.get(entry.subjectId) ?? entry.subjectId : undefined })) }))
     draft.subjects = courses
     draft.overrides ??= []
     draft.timelineIds = [selectedTimeline.id]
-    draft.assignments ??= []
+    draft.assignments = (draft.assignments ?? []).map((item) => ({ ...item, subjectId: item.subjectId ? subjectIdMap.get(item.subjectId) ?? item.subjectId : undefined }))
     return draft
   }
 
@@ -102,7 +111,9 @@ export function CrossGroupScheduleWorkspace({ organizationId, groups, onComplete
         ...item,
         entries: item.entries.map((entry) => (entry.sourceEntryId ?? entry.id) === sourceEntryId ? { ...entry, subjectId: subjectId || undefined } : entry),
       } : item)
-      return { ...value, [groupId]: { ...current, days } }
+      const assignments = current.assignments.filter((item) => !(item.timelineId === target.timelineId && item.entryId === sourceEntryId && (item.dayOfWeek?.includes(day) ?? true) && appliesToWeek(item.weeks, week)))
+      assignments.push({ id: `${target.id}:${sourceEntryId}`, timelineId: target.timelineId, entryId: sourceEntryId, dayOfWeek: [day], weeks: target.weeks, subjectId: subjectId || undefined })
+      return { ...value, [groupId]: { ...current, days, assignments } }
     })
   }
 
@@ -132,6 +143,6 @@ export function CrossGroupScheduleWorkspace({ organizationId, groups, onComplete
     <div className="cross-group-toolbar"><Field label="公共时间线"><Select value={timelineId} onChange={(event) => { setTimelineId(event.target.value); setSelectedGroups([]); setDrafts({}); setWeek(1) }}><option value="">选择时间线</option>{timelines.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></Field><div className="group-picker"><span className="group-picker-label">参与分组</span><div className="checks fluent-checks">{groups.map((group) => <Checkbox id={`cross-group-${group.id}`} key={group.id} checked={selectedGroups.includes(group.id)} disabled={!selectedTimeline} onChange={(_, data) => toggleGroup(group.id, data.checked === true)} label={group.name} />)}</div></div></div>
     <div className="day-pills fluent-day-pills">{DAYS.map((label, index) => <Button appearance={day === index + 1 ? 'primary' : 'secondary'} key={label} onClick={() => setDay(index + 1)}>{label}</Button>)}</div>
     <div className="week-toolbar"><Button appearance="subtle" disabled={week <= 1} onClick={() => setWeek(week - 1)}>上一周</Button><strong>循环第 {week} 周</strong><Button appearance="subtle" disabled={!selectedTimeline || week >= cycleWeeks} onClick={() => setWeek(week + 1)}>下一周</Button></div>
-    {!selectedTimeline ? <div className="empty-command">请先选择公共时间线。</div> : !selectedGroups.length ? <div className="empty-command">请选择参与排课的分组。</div> : <div className="cross-group-grid" style={{ gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedGroups.length}, minmax(180px, 1fr))` }}><div className="grid-head">时间段</div>{selectedGroups.map((groupId) => <div className="grid-head" key={groupId}>{groups.find((item) => item.id === groupId)?.name ?? '未命名分组'}</div>)}{entries.map((entry, index) => <div className="cross-group-row" key={entry.id}><div className="time-cell"><strong>第 {index + 1} 节</strong><span>{entry.startTime}–{entry.endTime}</span></div>{selectedGroups.map((groupId) => { const current = drafts[groupId] ? activeDay(drafts[groupId], day, week) : undefined; const value = current?.entries.find((item) => (item.sourceEntryId ?? item.id) === entry.id)?.subjectId ?? ''; return <Select key={groupId} aria-label={`${groups.find((item) => item.id === groupId)?.name ?? '分组'} 第 ${index + 1} 节`} value={value} disabled={!current} onChange={(event) => setCell(groupId, entry.id, event.target.value)}><option value="">未设置</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</Select> })}</div>)}</div>}
+    {!selectedTimeline ? <div className="empty-command">请先选择公共时间线。</div> : !selectedGroups.length ? <div className="empty-command">请选择参与排课的分组。</div> : <div className="cross-group-grid" style={{ gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedGroups.length}, minmax(180px, 1fr))` }}><div className="grid-head">时间段</div>{selectedGroups.map((groupId) => <div className="grid-head" key={groupId}>{groups.find((item) => item.id === groupId)?.name ?? '未命名分组'}</div>)}{entries.map((entry, index) => <div className="cross-group-row" key={entry.id}><div className="time-cell"><strong>第 {index + 1} 节</strong><span>{entry.startTime}–{entry.endTime}</span></div>{selectedGroups.map((groupId) => { const current = drafts[groupId] ? activeDay(drafts[groupId], day, week) : undefined; const currentEntry = current?.entries.find((item) => (item.sourceEntryId ?? item.id) === entry.id); const value = currentEntry?.subjectId ?? (current && currentEntry ? assignmentFor(drafts[groupId], current, currentEntry, week)?.subjectId ?? '' : ''); return <Select key={groupId} aria-label={`${groups.find((item) => item.id === groupId)?.name ?? '分组'} 第 ${index + 1} 节`} value={value} disabled={!current} onChange={(event) => setCell(groupId, entry.id, event.target.value)}><option value="">未设置</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</Select> })}</div>)}</div>}
   </Card></div>
 }
