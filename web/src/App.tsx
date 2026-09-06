@@ -30,18 +30,20 @@ import { ConfigWorkspace } from './ConfigWorkspace'
 import { AutomationWorkspace } from './AutomationWorkspace'
 import { ClassSwapWorkspace } from './ClassSwapWorkspace'
 import { AccessManagement } from './AccessManagement'
+import { ClassGroupWorkspace } from './ClassGroupWorkspace'
 import { OAuthProviderManagement } from './OAuthProviderManagement'
 import centralControlIcon from './assets/cw2-jikong.png'
 type ThemeMode = 'system' | 'light' | 'dark'
 import './App.css'
 
-type View = 'overview' | 'devices' | 'groups' | 'schedule' | 'timelines' | 'courses' | 'cross-schedule' | 'class-swap' | 'policy' | 'commands' | 'automation' | 'logs' | 'tenants'
+type View = 'overview' | 'devices' | 'groups' | 'class-groups' | 'schedule' | 'timelines' | 'courses' | 'cross-schedule' | 'class-swap' | 'policy' | 'commands' | 'automation' | 'logs' | 'tenants'
 type Notice = { tone: 'success' | 'error'; message: string } | null
 
 const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Desktop24Regular }> = [
   { id: 'overview', label: '总览', icon: AppsListDetail24Regular },
   { id: 'devices', label: '设备', icon: Desktop24Regular },
-  { id: 'groups', label: '分组与配对', icon: Organization24Regular },
+  { id: 'groups', label: '班级与配对', icon: Organization24Regular },
+  { id: 'class-groups', label: '分组管理', icon: PeopleTeam24Regular },
   { id: 'schedule', label: '课表发布', icon: CalendarLtr24Regular },
   { id: 'timelines', label: '时间线', icon: CalendarLtr24Regular },
   { id: 'courses', label: '课表课程', icon: DocumentBulletList24Regular },
@@ -56,14 +58,15 @@ const NAV_ITEMS: Array<{ id: View; label: string; icon: typeof Desktop24Regular 
 const VIEW_TITLES: Record<View, [string, string]> = {
   overview: ['运行总览', '设备连接与配置下发状态'],
   devices: ['设备', '检查终端状态、版本和配置修订'],
-  groups: ['分组与配对', '组织终端并生成一次性配对码'],
-  schedule: ['课表发布', '校验并向选定分组发布课表'],
+  groups: ['班级与配对', '组织终端并生成一次性配对码'],
+  'class-groups': ['分组管理', '将多个班级整理为可快捷选择的分组'],
+  schedule: ['课表发布', '校验并向选定班级发布课表'],
   timelines: ['时间线', '维护可复用的上课时间结构'],
   courses: ['课表课程', '配置课表可使用的课程信息'],
-  'cross-schedule': ['按天排课', '按公共时间线为多个分组逐天安排课程'],
+  'cross-schedule': ['按天排课', '按公共时间线为多个班级逐天安排课程'],
   'class-swap': ['临时换课', '获取客户端单双周课表并下发换课事件'],
   policy: ['策略', '统一锁定终端的受管设置'],
-  commands: ['命令', '向分组或单台设备下发受限操作'],
+  commands: ['命令', '向班级或单台设备下发受限操作'],
   automation: ['自动化', '按服务器时间和设备条件自动执行动作'],
   logs: ['客户端日志', '查看终端动态上报的诊断与日志'],
   tenants: ['租户管理', '创建租户账号并配置可访问的组织范围'],
@@ -90,6 +93,7 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
   const [password, setPassword] = useState('')
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [groups, setGroups] = useState<Group[]>([])
+  const [classGroups, setClassGroups] = useState<import('./api').ClassGroup[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [organizationId, setOrganizationId] = useState('')
   const [loading, setLoading] = useState(false)
@@ -117,11 +121,12 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
         setNotice(null)
         return
       }
-      const [nextGroups, nextDevices] = await Promise.all([
-        api.groups(nextOrganizationId), api.devices(nextOrganizationId),
+      const [nextGroups, nextDevices, nextClassGroups] = await Promise.all([
+        api.groups(nextOrganizationId), api.devices(nextOrganizationId), api.classGroups(nextOrganizationId),
       ])
       setGroups(nextGroups)
       setDevices(nextDevices)
+      setClassGroups(nextClassGroups)
       setConnected(true)
       setNotice(null)
     } catch (error) {
@@ -221,12 +226,13 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
           {view === 'overview' && <Overview devices={devices} groups={groups} organizations={organizations} onComplete={complete} />}
         {view === 'devices' && <DevicesView devices={devices} groups={groups} onComplete={complete} />}
         {view === 'groups' && <GroupsView organizationId={organizationId} groups={groups} onComplete={complete} />}
-        {view === 'schedule' && <ScheduleWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
+        {view === 'class-groups' && <ClassGroupWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
+        {view === 'schedule' && <ScheduleWorkspace organizationId={organizationId} groups={groups} classGroups={classGroups} onComplete={complete} />}
         {view === 'timelines' && <TimelineWorkspace organizationId={organizationId} onComplete={complete} />}
         {view === 'courses' && <CourseWorkspace organizationId={organizationId} onComplete={complete} />}
-        {view === 'cross-schedule' && <CrossGroupScheduleWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
+        {view === 'cross-schedule' && <CrossGroupScheduleWorkspace organizationId={organizationId} groups={groups} classGroups={classGroups} onComplete={complete} />}
         {view === 'class-swap' && <ClassSwapWorkspace organizationId={organizationId} groups={groups} devices={devices} onComplete={complete} />}
-        {view === 'policy' && <ConfigWorkspace organizationId={organizationId} groups={groups} onComplete={complete} />}
+        {view === 'policy' && <ConfigWorkspace organizationId={organizationId} groups={groups} classGroups={classGroups} onComplete={complete} />}
         {view === 'commands' && <CommandsView organizationId={organizationId} groups={groups} devices={devices} onComplete={complete} />}
         {view === 'automation' && <AutomationWorkspace organizationId={organizationId} groups={groups} devices={devices} onComplete={complete} />}
         {view === 'logs' && <LogsView organizationId={organizationId} />}
@@ -287,7 +293,7 @@ function TenantManagement({ organizations, groups, devices, onComplete }: { orga
   async function createMember(event: FormEvent) { event.preventDefault(); try { await api.createUser({ username: username.trim(), password, role, organization_ids: selected }); setUsername(''); setPassword(''); setSelected([]); onComplete('租户成员已创建'); load() } catch (error) { onComplete(error instanceof Error ? error.message : '创建成员失败', 'error') } }
   async function assign(user: AdminUser, ids: string[]) { try { await api.assignUserOrganizations(user.id, ids); onComplete(`“${user.username}”的租户范围已更新`); load() } catch (error) { onComplete(error instanceof Error ? error.message : '更新授权失败', 'error') } }
   function organizationChecks(ids: string[], change: (value: string[]) => void) { return <div className="checks">{organizations.map((organization) => <label key={organization.id}><input type="checkbox" checked={ids.includes(organization.id)} onChange={(event) => change(event.target.checked ? [...ids, organization.id] : ids.filter((id) => id !== organization.id))} />{organization.name}</label>)}</div> }
-  return <div className="tenant-layout"><section className="form-section"><h2>总设置</h2><p>控制是否允许未登录用户在登录页注册新租户。</p><Checkbox label="允许公开注册" checked={allowRegistration} onChange={(_, data) => { const enabled = Boolean(data.checked); setAllowRegistration(enabled); void api.updateRegistrationSetting(enabled).then(() => onComplete(enabled ? '已允许公开注册' : '已关闭公开注册')).catch((error) => onComplete(error instanceof Error ? error.message : '保存设置失败', 'error')) }} /></section><section className="form-section"><h2>新建租户</h2><p>每个租户拥有独立的分组、设备、课表、策略、命令和日志。</p><form onSubmit={createTenant}><label>租户名称<input value={tenantName} onChange={(event) => setTenantName(event.target.value)} placeholder="例如：示范中学" /></label><button className="primary" disabled={!tenantName.trim()}><Add24Regular />创建租户</button></form></section><section className="form-section"><h2>新建成员</h2><p>创建后可在下方权限树中精细授权。</p><form onSubmit={createMember}><label>用户名<input value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 12 个字符" /></label><label>初始模板<select value={role} onChange={(event) => setRole(event.target.value)}><option value="viewer">只读</option><option value="operator">操作员</option><option value="admin">租户管理员</option></select></label><fieldset><legend>初始组织范围</legend>{organizationChecks(selected, setSelected)}</fieldset><button className="primary" disabled={!username.trim() || password.length < 12}><PeopleTeam24Regular />创建成员</button></form></section><section className="data-section tenant-members"><div className="section-heading"><h2>成员与租户授权</h2><span>{users.length} 名成员</span></div>{users.length === 0 && <div className="empty-command">暂无租户成员</div>}{users.map((user) => <TenantMemberRow key={user.id} user={user} organizations={organizations} onAssign={assign} />)}</section><section className="span-all"><AccessManagement organizations={organizations} groups={groups} devices={devices} users={users} onUsersChanged={load} onComplete={onComplete} /></section><section className="span-all"><OAuthProviderManagement onComplete={onComplete} /></section></div>
+  return <div className="tenant-layout"><section className="form-section"><h2>总设置</h2><p>控制是否允许未登录用户在登录页注册新租户。</p><Checkbox label="允许公开注册" checked={allowRegistration} onChange={(_, data) => { const enabled = Boolean(data.checked); setAllowRegistration(enabled); void api.updateRegistrationSetting(enabled).then(() => onComplete(enabled ? '已允许公开注册' : '已关闭公开注册')).catch((error) => onComplete(error instanceof Error ? error.message : '保存设置失败', 'error')) }} /></section><section className="form-section"><h2>新建租户</h2><p>每个租户拥有独立的班级、设备、课表、策略、命令和日志。</p><form onSubmit={createTenant}><label>租户名称<input value={tenantName} onChange={(event) => setTenantName(event.target.value)} placeholder="例如：示范中学" /></label><button className="primary" disabled={!tenantName.trim()}><Add24Regular />创建租户</button></form></section><section className="form-section"><h2>新建成员</h2><p>创建后可在下方权限树中精细授权。</p><form onSubmit={createMember}><label>用户名<input value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 12 个字符" /></label><label>初始模板<select value={role} onChange={(event) => setRole(event.target.value)}><option value="viewer">只读</option><option value="operator">操作员</option><option value="admin">租户管理员</option></select></label><fieldset><legend>初始组织范围</legend>{organizationChecks(selected, setSelected)}</fieldset><button className="primary" disabled={!username.trim() || password.length < 12}><PeopleTeam24Regular />创建成员</button></form></section><section className="data-section tenant-members"><div className="section-heading"><h2>成员与租户授权</h2><span>{users.length} 名成员</span></div>{users.length === 0 && <div className="empty-command">暂无租户成员</div>}{users.map((user) => <TenantMemberRow key={user.id} user={user} organizations={organizations} onAssign={assign} />)}</section><section className="span-all"><AccessManagement organizations={organizations} groups={groups} devices={devices} users={users} onUsersChanged={load} onComplete={onComplete} /></section><section className="span-all"><OAuthProviderManagement onComplete={onComplete} /></section></div>
 }
 
 function TenantMemberRow({ user, organizations, onAssign }: { user: AdminUser; organizations: Organization[]; onAssign: (user: AdminUser, ids: string[]) => void }) {
@@ -299,13 +305,13 @@ function TenantMemberRow({ user, organizations, onAssign }: { user: AdminUser; o
 function Overview({ devices, groups, organizations, onComplete }: { devices: Device[]; groups: Group[]; organizations: Organization[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const online = devices.filter(isOnline).length
   const drifted = devices.filter((device) => { const group = groups.find((item) => item.id === device.group_id); return group && (device.schedule_revision < group.schedule_revision || device.policy_revision < group.policy_revision) }).length
-  return <>{organizations.length === 0 && <OrganizationSetup onComplete={onComplete} />}<div className="metrics"><Metric label="设备总数" value={devices.length} detail={`${groups.length} 个分组`} /><Metric label="在线" value={online} detail={devices.length ? `${Math.round(online / devices.length * 100)}% 可用` : '等待设备配对'} tone="green" /><Metric label="配置漂移" value={drifted} detail={drifted ? '等待终端同步' : '修订状态一致'} tone={drifted ? 'amber' : undefined} /><Metric label="离线" value={devices.length - online} detail="超过 45 秒未上报" /></div><DeviceTable devices={devices.slice(0, 8)} groups={groups} title="最近设备" /></>
+  return <>{organizations.length === 0 && <OrganizationSetup onComplete={onComplete} />}<div className="metrics"><Metric label="设备总数" value={devices.length} detail={`${groups.length} 个班级`} /><Metric label="在线" value={online} detail={devices.length ? `${Math.round(online / devices.length * 100)}% 可用` : '等待设备配对'} tone="green" /><Metric label="配置漂移" value={drifted} detail={drifted ? '等待终端同步' : '修订状态一致'} tone={drifted ? 'amber' : undefined} /><Metric label="离线" value={devices.length - online} detail="超过 45 秒未上报" /></div><DeviceTable devices={devices.slice(0, 8)} groups={groups} title="最近设备" /></>
 }
 
 function OrganizationSetup({ onComplete }: { onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const [name, setName] = useState('')
   async function submit(event: FormEvent) { event.preventDefault(); try { await api.createOrganization(name); onComplete('组织已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建失败', 'error') } }
-  return <form className="organization-setup" onSubmit={submit}><Organization24Regular /><div className="organization-setup-copy"><strong>创建首个组织</strong><span>组织是分组、课表和策略的管理边界。</span></div><div className="organization-setup-actions"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：示范中学" /><button className="primary" disabled={!name.trim()}><Add24Regular />创建</button></div></form>
+  return <form className="organization-setup" onSubmit={submit}><Organization24Regular /><div className="organization-setup-copy"><strong>创建首个组织</strong><span>组织是班级、课表和策略的管理边界。</span></div><div className="organization-setup-actions"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：示范中学" /><button className="primary" disabled={!name.trim()}><Add24Regular />创建</button></div></form>
 }
 
 function Metric({ label, value, detail, tone }: { label: string; value: number; detail: string; tone?: string }) {
@@ -315,7 +321,7 @@ function Metric({ label, value, detail, tone }: { label: string; value: number; 
 function DevicesView({ devices, groups, onComplete }: { devices: Device[]; groups: Group[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const [query, setQuery] = useState('')
   const filtered = devices.filter((device) => device.name.toLowerCase().includes(query.toLowerCase()))
-  async function move(deviceId: string, groupId: string) { try { await api.moveDevice(deviceId, groupId); onComplete('设备分组已更新') } catch (error) { onComplete(error instanceof Error ? error.message : '换组失败', 'error') } }
+  async function move(deviceId: string, groupId: string) { try { await api.moveDevice(deviceId, groupId); onComplete('设备班级已更新') } catch (error) { onComplete(error instanceof Error ? error.message : '换组失败', 'error') } }
   async function remove(deviceId: string, deviceName: string) {
     if (!window.confirm(`确定删除设备“${deviceName}”？删除后该设备需要重新配对。`)) return
     try { await api.deleteDevice(deviceId); onComplete('设备已删除') } catch (error) { onComplete(error instanceof Error ? error.message : '删除设备失败', 'error') }
@@ -324,16 +330,16 @@ function DevicesView({ devices, groups, onComplete }: { devices: Device[]; group
 }
 
 function DeviceTable({ devices, groups, title, onMove, onDelete }: { devices: Device[]; groups: Group[]; title: string; onMove?: (deviceId: string, groupId: string) => void; onDelete?: (deviceId: string, deviceName: string) => void }) {
-  return <section className="data-section"><div className="section-heading"><h2>{title}</h2><span>{devices.length} 项</span></div><div className="table-wrap"><table><thead><tr><th>设备</th><th>状态</th><th>分组</th><th>当前课程</th><th>应用 / 插件</th><th>课表 / 策略</th><th>最后连接</th>{onDelete && <th>操作</th>}</tr></thead><tbody>{devices.length === 0 && <tr><td colSpan={onDelete ? 8 : 7} className="empty">暂无设备</td></tr>}{devices.map((device) => <tr key={device.id}><td><strong>{device.name}</strong><small>{device.id.slice(0, 8)}</small></td><td><span className={`state ${isOnline(device) ? 'online' : ''}`}><i />{device.revoked ? '已撤销' : isOnline(device) ? '在线' : '离线'}</span></td><td>{onMove ? <select aria-label={`调整 ${device.name} 的分组`} value={device.group_id} onChange={(event) => onMove(device.id, event.target.value)}>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select> : groups.find((group) => group.id === device.group_id)?.name ?? '未知'}</td><td>{device.current_title || device.current_status || '-'}</td><td>{device.app_version || '-'} / {device.plugin_version || '-'}</td><td>r{device.schedule_revision} / r{device.policy_revision}</td><td>{relativeTime(device.last_seen)}</td>{onDelete && <td><Button appearance="subtle" icon={<Delete24Regular />} aria-label={`删除设备 ${device.name}`} title="删除设备" onClick={() => onDelete(device.id, device.name)} /></td>}</tr>)}</tbody></table></div></section>
+  return <section className="data-section"><div className="section-heading"><h2>{title}</h2><span>{devices.length} 项</span></div><div className="table-wrap"><table><thead><tr><th>设备</th><th>状态</th><th>班级</th><th>当前课程</th><th>应用 / 插件</th><th>课表 / 策略</th><th>最后连接</th>{onDelete && <th>操作</th>}</tr></thead><tbody>{devices.length === 0 && <tr><td colSpan={onDelete ? 8 : 7} className="empty">暂无设备</td></tr>}{devices.map((device) => <tr key={device.id}><td><strong>{device.name}</strong><small>{device.id.slice(0, 8)}</small></td><td><span className={`state ${isOnline(device) ? 'online' : ''}`}><i />{device.revoked ? '已撤销' : isOnline(device) ? '在线' : '离线'}</span></td><td>{onMove ? <select aria-label={`调整 ${device.name} 的班级`} value={device.group_id} onChange={(event) => onMove(device.id, event.target.value)}>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select> : groups.find((group) => group.id === device.group_id)?.name ?? '未知'}</td><td>{device.current_title || device.current_status || '-'}</td><td>{device.app_version || '-'} / {device.plugin_version || '-'}</td><td>r{device.schedule_revision} / r{device.policy_revision}</td><td>{relativeTime(device.last_seen)}</td>{onDelete && <td><Button appearance="subtle" icon={<Delete24Regular />} aria-label={`删除设备 ${device.name}`} title="删除设备" onClick={() => onDelete(device.id, device.name)} /></td>}</tr>)}</tbody></table></div></section>
 }
 
 function GroupsView({ organizationId, groups, onComplete }: { organizationId: string; groups: Group[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const [name, setName] = useState('')
   const [groupId, setGroupId] = useState('')
   const [pairing, setPairing] = useState<{ code: string; expires_at: string } | null>(null)
-  async function createGroup(event: FormEvent) { event.preventDefault(); try { await api.createGroup(organizationId, name); setName(''); onComplete('分组已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建失败', 'error') } }
+  async function createGroup(event: FormEvent) { event.preventDefault(); try { await api.createGroup(organizationId, name); setName(''); onComplete('班级已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建失败', 'error') } }
   async function createCode() { try { const result = await api.createPairingCode(groupId, 15); setPairing(result); onComplete('一次性配对码已生成') } catch (error) { onComplete(error instanceof Error ? error.message : '生成失败', 'error') } }
-  return <div className="two-column"><section className="form-section"><h2>新建分组</h2><p>设备配对后将继承该分组的课表和策略。</p><form onSubmit={createGroup}><label>分组名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：高一教学楼" /></label><button className="primary" disabled={!organizationId || !name.trim()}><Add24Regular />创建分组</button></form></section><section className="form-section"><h2>设备配对</h2><p>配对码有效 15 分钟，使用一次后立即失效。</p><label>目标分组<select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">选择分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button className="primary" disabled={!groupId} onClick={() => void createCode()}><Key24Regular />生成配对码</button>{pairing && <div className="pairing-code"><strong>{pairing.code}</strong><span>有效至 {new Date(pairing.expires_at).toLocaleTimeString('zh-CN')}</span></div>}</section><section className="data-section span-all"><div className="section-heading"><h2>分组</h2><span>{groups.length} 项</span></div><div className="group-grid">{groups.map((group) => <article className="group-row" key={group.id}><Organization24Regular /><div><strong>{group.name}</strong><span>课表 r{group.schedule_revision} · 策略 r{group.policy_revision}</span></div></article>)}</div></section></div>
+  return <div className="two-column"><section className="form-section"><h2>新建班级</h2><p>设备配对后将继承该班级的课表和策略。</p><form onSubmit={createGroup}><label>班级名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：高一教学楼" /></label><button className="primary" disabled={!organizationId || !name.trim()}><Add24Regular />创建班级</button></form></section><section className="form-section"><h2>设备配对</h2><p>配对码有效 15 分钟，使用一次后立即失效。</p><label>目标班级<select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">选择班级</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button className="primary" disabled={!groupId} onClick={() => void createCode()}><Key24Regular />生成配对码</button>{pairing && <div className="pairing-code"><strong>{pairing.code}</strong><span>有效至 {new Date(pairing.expires_at).toLocaleTimeString('zh-CN')}</span></div>}</section><section className="data-section span-all"><div className="section-heading"><h2>班级</h2><span>{groups.length} 项</span></div><div className="group-grid">{groups.map((group) => <article className="group-row" key={group.id}><Organization24Regular /><div><strong>{group.name}</strong><span>课表 r{group.schedule_revision} · 策略 r{group.policy_revision}</span></div></article>)}</div></section></div>
 }
 
 function CommandsView({ organizationId, groups, devices, onComplete }: { organizationId: string; groups: Group[]; devices: Device[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
@@ -359,7 +365,7 @@ function CommandsView({ organizationId, groups, devices, onComplete }: { organiz
   }, [organizationId])
   async function submit(event: FormEvent) { event.preventDefault(); try { const payload = type === 'show_notification' ? { title, message } : type === 'trigger_action' ? { action_id: actionId.trim() } : {}; const result = await api.createCommand({ type, [`${targetKind}_id`]: targetId, payload, expires_in_seconds: 300 }); onComplete(`命令 #${result.cursor} 已进入下发队列`) } catch (error) { onComplete(error instanceof Error ? error.message : '下发失败', 'error') } }
   const targets = targetKind === 'group' ? groups : devices
-  return <div className="command-layout"><section className="form-section command-form"><form onSubmit={submit}><div className="segmented"><button type="button" className={targetKind === 'group' ? 'selected' : ''} onClick={() => { setTargetKind('group'); setTargetId('') }}>分组</button><button type="button" className={targetKind === 'device' ? 'selected' : ''} onClick={() => { setTargetKind('device'); setTargetId('') }}>单台设备</button></div><label>目标<select value={targetId} onChange={(event) => setTargetId(event.target.value)}><option value="">选择目标</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label><label>操作<select value={type} onChange={(event) => setType(event.target.value)}><option value="refresh_status">立即刷新状态</option><option value="restart_app">重启 Class Widgets</option><option value="upload_diagnostics">上传诊断信息</option><option value="show_notification">显示通知</option><option value="trigger_action">触发 Action</option></select></label>{type === 'show_notification' && <><label>通知标题<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>通知内容<textarea value={message} onChange={(event) => setMessage(event.target.value)} /></label></>}{type === 'trigger_action' && <label>Action ID<input value={actionId} onChange={(event) => setActionId(event.target.value)} placeholder="例如：com.hpdnya.ea2c.convert_today" /></label>}<div className="form-actions"><span>命令将在设备下次 10 秒轮询时获取。</span><button className="primary" disabled={!targetId || (type === 'trigger_action' && !actionId.trim())}><Code24Regular />下发命令</button></div></form></section><CommandHistory commands={commands} groups={groups} devices={devices} /></div>
+  return <div className="command-layout"><section className="form-section command-form"><form onSubmit={submit}><div className="segmented"><button type="button" className={targetKind === 'group' ? 'selected' : ''} onClick={() => { setTargetKind('group'); setTargetId('') }}>班级</button><button type="button" className={targetKind === 'device' ? 'selected' : ''} onClick={() => { setTargetKind('device'); setTargetId('') }}>单台设备</button></div><label>目标<select value={targetId} onChange={(event) => setTargetId(event.target.value)}><option value="">选择目标</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label><label>操作<select value={type} onChange={(event) => setType(event.target.value)}><option value="refresh_status">立即刷新状态</option><option value="restart_app">重启 Class Widgets</option><option value="upload_diagnostics">上传诊断信息</option><option value="show_notification">显示通知</option><option value="trigger_action">触发 Action</option></select></label>{type === 'show_notification' && <><label>通知标题<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>通知内容<textarea value={message} onChange={(event) => setMessage(event.target.value)} /></label></>}{type === 'trigger_action' && <label>Action ID<input value={actionId} onChange={(event) => setActionId(event.target.value)} placeholder="例如：com.hpdnya.ea2c.convert_today" /></label>}<div className="form-actions"><span>命令将在设备下次 10 秒轮询时获取。</span><button className="primary" disabled={!targetId || (type === 'trigger_action' && !actionId.trim())}><Code24Regular />下发命令</button></div></form></section><CommandHistory commands={commands} groups={groups} devices={devices} /></div>
 }
 
 function CommandHistory({ commands, groups, devices }: { commands: CommandRecord[]; groups: Group[]; devices: Device[] }) {

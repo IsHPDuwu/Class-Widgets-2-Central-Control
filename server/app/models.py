@@ -98,6 +98,28 @@ class DeviceGroup(Base):
     __table_args__ = (UniqueConstraint("organization_id", "name"),)
 
 
+class ClassGroup(Base):
+    """仅用于管理端批量选择班级，不影响设备、课表或策略下发逻辑。"""
+
+    __tablename__ = "class_groups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    members: Mapped[list[ClassGroupMember]] = relationship(cascade="all, delete-orphan")
+
+    __table_args__ = (UniqueConstraint("organization_id", "name"),)
+
+
+class ClassGroupMember(Base):
+    __tablename__ = "class_group_members"
+
+    class_group_id: Mapped[str] = mapped_column(ForeignKey("class_groups.id", ondelete="CASCADE"), primary_key=True)
+    device_group_id: Mapped[str] = mapped_column(ForeignKey("device_groups.id", ondelete="CASCADE"), primary_key=True)
+
+
 class PairingCode(Base):
     __tablename__ = "pairing_codes"
 

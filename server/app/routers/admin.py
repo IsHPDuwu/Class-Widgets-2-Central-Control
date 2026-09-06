@@ -16,6 +16,8 @@ from ..models import (
     Command,
     CommandAcknowledgement,
     ClassSwapSession,
+    ClassGroup,
+    ClassGroupMember,
     CourseResource,
     Device,
     DeviceScheduleSnapshot,
@@ -34,6 +36,8 @@ from ..models import (
 from ..schemas import (
     ClassSwapCreate,
     ClassSwapPrepare,
+    ClassGroupCreate,
+    ClassGroupUpdate,
     CommandCreate,
     GroupAssignment,
     GroupCreate,
@@ -443,6 +447,84 @@ def create_group(
     db.add(group)
     db.commit()
     return {"id": group.id, "organization_id": group.organization_id, "name": group.name}
+
+
+def _class_group_dict(item: ClassGroup, db: Session) -> dict:
+    member_ids = db.scalars(
+        select(ClassGroupMember.device_group_id).where(ClassGroupMember.class_group_id == item.id)
+    ).all()
+    return {"id": item.id, "organization_id": item.organization_id, "name": item.name, "group_ids": list(member_ids)}
+
+
+def _validate_class_group_members(organization_id: str, group_ids: list[str], db: Session) -> None:
+    unique_ids = set(group_ids)
+    groups = db.scalars(select(DeviceGroup).where(DeviceGroup.id.in_(unique_ids))).all() if unique_ids else []
+    if len(groups) != len(unique_ids) or any(group.organization_id != organization_id for group in groups):
+        raise HTTPException(status_code=400, detail="invalid class group members")
+
+
+@router.get("/class-groups")
+def list_class_groups(
+    organization_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> list[dict]:
+    require_organization_access(organization_id, principal, db)
+    require_permission(principal, "organization.groups.view", organization_id=organization_id)
+    items = db.scalars(select(ClassGroup).where(ClassGroup.organization_id == organization_id).order_by(ClassGroup.name)).all()
+    return [_class_group_dict(item, db) for item in items]
+
+
+@router.post("/class-groups", status_code=status.HTTP_201_CREATED)
+def create_class_group(
+    payload: ClassGroupCreate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    require_organization_access(payload.organization_id, principal, db)
+    require_permission(principal, "organization.groups.create", organization_id=payload.organization_id)
+    _validate_class_group_members(payload.organization_id, payload.group_ids, db)
+    item = ClassGroup(organization_id=payload.organization_id, name=payload.name)
+    db.add(item)
+    db.flush()
+    db.add_all(ClassGroupMember(class_group_id=item.id, device_group_id=group_id) for group_id in set(payload.group_ids))
+    db.commit()
+    return _class_group_dict(item, db)
+
+
+@router.put("/class-groups/{class_group_id}")
+def update_class_group(
+    class_group_id: str,
+    payload: ClassGroupUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> dict:
+    item = db.get(ClassGroup, class_group_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="class group not found")
+    require_organization_access(item.organization_id, principal, db)
+    require_permission(principal, "organization.groups.update", organization_id=item.organization_id)
+    _validate_class_group_members(item.organization_id, payload.group_ids, db)
+    item.name = payload.name
+    db.query(ClassGroupMember).filter(ClassGroupMember.class_group_id == item.id).delete()
+    db.add_all(ClassGroupMember(class_group_id=item.id, device_group_id=group_id) for group_id in set(payload.group_ids))
+    db.commit()
+    return _class_group_dict(item, db)
+
+
+@router.delete("/class-groups/{class_group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_class_group(
+    class_group_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    principal: Annotated[dict, Depends(require_admin)],
+) -> None:
+    item = db.get(ClassGroup, class_group_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="class group not found")
+    require_organization_access(item.organization_id, principal, db)
+    require_permission(principal, "organization.groups.delete", organization_id=item.organization_id)
+    db.delete(item)
+    db.commit()
 
 
 @router.get("/groups")

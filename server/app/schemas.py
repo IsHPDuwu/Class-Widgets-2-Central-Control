@@ -199,6 +199,17 @@ class GroupCreate(BaseModel):
     name: Annotated[str, Field(min_length=1, max_length=120)]
 
 
+class ClassGroupCreate(BaseModel):
+    organization_id: str
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    group_ids: list[str] = Field(default_factory=list)
+
+
+class ClassGroupUpdate(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=120)]
+    group_ids: list[str] = Field(default_factory=list)
+
+
 class GroupAssignment(BaseModel):
     group_id: str
 

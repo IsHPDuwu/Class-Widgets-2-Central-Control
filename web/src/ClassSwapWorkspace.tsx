@@ -213,7 +213,7 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
         {preparation && <Badge appearance="tint" color={preparation.ready ? 'success' : 'informative'}>{preparation.ready ? '课表已同步' : '等待设备上传'}</Badge>}
       </div>
       <div className="class-swap-device-fields">
-        <Field label="分组筛选"><Select value={groupFilter} onChange={(_, data) => { setGroupFilter(data.value); resetPreparation() }}><option value="">全部分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
+        <Field label="班级筛选"><Select value={groupFilter} onChange={(_, data) => { setGroupFilter(data.value); resetPreparation() }}><option value="">全部班级</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
         <Field label="目标设备"><Select value={deviceId} onChange={(_, data) => { setDeviceId(data.value); resetPreparation() }}>{availableDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}</Select></Field>
         <div className="class-swap-device-actions"><Button appearance="primary" icon={<CalendarSync24Regular />} disabled={!deviceId || loading} onClick={() => void prepare()}>获取设备课表</Button><Button icon={<ArrowSync24Regular />} disabled={!requestId || loading} onClick={() => void refreshPreparation()}>刷新</Button></div>
       </div>

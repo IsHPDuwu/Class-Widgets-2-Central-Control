@@ -91,6 +91,6 @@ export function AccessManagement({ organizations, groups, devices, users, onUser
         })}</div></div>}
       </div>
     </div>}
-    <div className="access-save"><Text size={200}>父节点勾选会授予该模块全部动作；组织授权向分组和设备继承。</Text><Button appearance="primary" icon={<Save24Regular />} disabled={!userId || loading} onClick={() => void save()}>保存权限</Button></div>
+    <div className="access-save"><Text size={200}>父节点勾选会授予该模块全部动作；组织授权向班级和设备继承。</Text><Button appearance="primary" icon={<Save24Regular />} disabled={!userId || loading} onClick={() => void save()}>保存权限</Button></div>
   </section>
 }

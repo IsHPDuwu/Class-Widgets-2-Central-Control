@@ -15,6 +15,13 @@ export type Group = {
   policy_revision: number
 }
 
+export type ClassGroup = {
+  id: string
+  organization_id: string
+  name: string
+  group_ids: string[]
+}
+
 export type Device = {
   id: string
   group_id: string
@@ -251,6 +258,7 @@ export const api = {
   assignUserOrganizations: (id: string, organizationIds: string[]) => protectedAuthRequest<{ id: string; organization_ids: string[] }>(`/users/${id}/organizations`, { method: 'PUT', body: JSON.stringify({ organization_ids: organizationIds }) }),
   organizations: () => request<Organization[]>('/organizations'),
   groups: (organizationId: string) => request<Group[]>(`/groups?organization_id=${encodeURIComponent(organizationId)}`),
+  classGroups: (organizationId: string) => request<ClassGroup[]>(`/class-groups?organization_id=${encodeURIComponent(organizationId)}`),
   devices: (organizationId: string) => request<Device[]>(`/devices?organization_id=${encodeURIComponent(organizationId)}`),
   commands: (organizationId: string) => request<CommandRecord[]>(`/commands?organization_id=${encodeURIComponent(organizationId)}`),
   schedules: (organizationId: string) => request<ScheduleRecord[]>(`/schedules?organization_id=${encodeURIComponent(organizationId)}`),
@@ -262,6 +270,9 @@ export const api = {
   createOrganization: (name: string) => post<Organization>('/organizations', { name }),
   createGroup: (organizationId: string, name: string) =>
     post<Group>('/groups', { organization_id: organizationId, name }),
+  createClassGroup: (organizationId: string, name: string, groupIds: string[]) => post<ClassGroup>('/class-groups', { organization_id: organizationId, name, group_ids: groupIds }),
+  updateClassGroup: (id: string, name: string, groupIds: string[]) => put<ClassGroup>(`/class-groups/${id}`, { name, group_ids: groupIds }),
+  deleteClassGroup: (id: string) => request<void>(`/class-groups/${id}`, { method: 'DELETE' }),
   createPairingCode: (groupId: string, expiresInMinutes: number) =>
     post<{ code: string; expires_at: string }>(`/groups/${groupId}/pairing-codes`, {
       expires_in_minutes: expiresInMinutes,
