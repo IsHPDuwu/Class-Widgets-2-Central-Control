@@ -20,7 +20,7 @@ import {
   WeatherMoon24Regular,
   SignOut24Regular,
 } from '@fluentui/react-icons'
-import { Button, Checkbox, Select, Tab, TabList } from '@fluentui/react-components'
+import { Button, Checkbox, Field, Input, Select, Tab, TabList } from '@fluentui/react-components'
 import { api, getAdminKey, getSessionToken, setAdminKey, setSessionToken, type AdminUser, type CommandRecord, type Device, type DiagnosticDetail, type Group, type OAuthProviderPublic, type Organization, type Principal } from './api'
 import { ScheduleWorkspace } from './ScheduleWorkspace'
 import { TimelineWorkspace } from './TimelineWorkspace'
@@ -251,10 +251,96 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
   useEffect(() => { api.registrationStatus().then((result) => setRegistrationAllowed(result.allow_registration)).catch(() => setRegistrationAllowed(false)) }, [])
   useEffect(() => { api.oauthProvidersPublic().then(setOauthProviders).catch(() => setOauthProviders([])) }, [])
   async function register(event: FormEvent) { event.preventDefault(); try { await api.register({ organization_name: organizationName.trim(), username: username.trim(), password }); setRegistering(false); onComplete('注册成功，请登录'); setOrganizationName('') } catch (error) { onComplete(error instanceof Error ? error.message : '注册失败', 'error') } }
-  return <div className="login-page"><div className="login-banner"><div className="login-banner-copy"><img src={centralControlIcon} alt="Class Widgets" /><strong>Class Widgets</strong><span>集中管理平台</span><p>统一管理设备、课表、策略与自动化任务。</p></div></div><div className="login-card"><div className="login-heading"><h1>{registering ? '创建租户账号' : '登录集控'}</h1><p>{mode === 'admin' ? '平台管理员使用管理密钥进入后台。' : registering ? '注册后将创建一个新的租户及管理员账号。' : '租户成员使用账号、密码或组织身份源登录。'}</p></div>{!registering && <div className="segmented login-segment"><button type="button" className={mode === 'tenant' ? 'selected' : ''} onClick={() => setMode('tenant')}>租户登录</button><button type="button" className={mode === 'admin' ? 'selected' : ''} onClick={() => setMode('admin')}>管理员登录</button></div>}{registering ? <form onSubmit={register}><label>租户名称<input value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" /></label><label>管理员用户名<input value={username} onChange={(event) => onUsernameChange(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} placeholder="至少 12 个字符" /></label><Button appearance="primary" type="submit" disabled={!organizationName.trim() || !username.trim() || password.length < 12 || loading}>注册</Button><Button appearance="subtle" type="button" onClick={() => setRegistering(false)}>返回登录</Button></form> : mode === 'admin' ? <form onSubmit={onAdminLogin}><label>管理员密钥<input type="password" value={adminKey} onChange={(event) => onAdminKeyChange(event.target.value)} placeholder="输入平台管理员密钥" /></label><Button appearance="primary" type="submit" disabled={!adminKey.trim() || loading}>管理员登录</Button></form> : <><form onSubmit={onTenantLogin}><label>用户名<input value={username} onChange={(event) => onUsernameChange(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => onPasswordChange(event.target.value)} /></label><Button appearance="primary" type="submit" disabled={!username.trim() || password.length < 12 || loading}>登录</Button>{registrationAllowed && <Button appearance="subtle" type="button" onClick={() => setRegistering(true)}>注册新租户</Button>}</form>{oauthProviders.length > 0 && <div className="oauth-login-options"><span>或使用组织身份源</span>{oauthProviders.map((provider) => <Button key={provider.key} appearance="outline" icon={<ShieldLock24Regular />} onClick={() => { window.location.href = `/api/v1/auth/oauth/${encodeURIComponent(provider.key)}/start?return_path=${encodeURIComponent('/')}` }}>使用 {provider.name} 登录</Button>)}</div>}</>}</div></div>
+  const usernameValid = /^[A-Za-z0-9_.-]+$/.test(username.trim())
+  const passwordTooShort = password.length > 0 && password.length < 12
+  const passwordTooLong = password.length > 200
+  return (
+    <div className="login-page">
+      <div className="login-banner">
+        <div className="login-banner-copy">
+          <img src={centralControlIcon} alt="Class Widgets" />
+          <strong>Class Widgets</strong>
+          <span>集中管理平台</span>
+          <p>统一管理设备、课表、策略与自动化任务。</p>
+        </div>
+      </div>
+      <div className="login-card">
+        <div className="login-heading">
+          <h1>{registering ? '创建租户账号' : '登录集控'}</h1>
+          <p>{mode === 'admin' ? '平台管理员使用管理密钥进入后台。' : registering ? '注册后将创建一个新的租户及管理员账号。' : '租户成员使用账号、密码或组织身份源登录。'}</p>
+        </div>
+        {!registering && (
+          <div className="segmented login-segment">
+            <button type="button" className={mode === 'tenant' ? 'selected' : ''} onClick={() => setMode('tenant')}>租户登录</button>
+            <button type="button" className={mode === 'admin' ? 'selected' : ''} onClick={() => setMode('admin')}>管理员登录</button>
+          </div>
+        )}
+        {registering ? (
+          <form onSubmit={register}>
+            <Field label="租户名称" required hint="1–120 个字符，例如：示范中学">
+              <Input value={organizationName} maxLength={120} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" />
+            </Field>
+            <Field
+              label="管理员用户名"
+              required
+              hint="1–80 个字符，仅支持字母、数字、下划线、点与连字符。"
+              validationState={username.length > 0 && !usernameValid ? 'error' : undefined}
+              validationMessage={username.length > 0 && !usernameValid ? '只能包含字母、数字、下划线、点或连字符。' : undefined}
+            >
+              <Input value={username} maxLength={80} onChange={(event) => onUsernameChange(event.target.value)} placeholder="例如：admin" />
+            </Field>
+            <Field
+              label="密码"
+              required
+              hint="12–200 个字符，请使用足够复杂的密码。"
+              validationState={passwordTooShort || passwordTooLong ? 'error' : password.length >= 12 ? 'success' : undefined}
+              validationMessage={passwordTooShort ? `密码至少需要 12 个字符，当前 ${password.length} 个。` : passwordTooLong ? '密码不能超过 200 个字符。' : password.length >= 12 ? '密码长度符合要求。' : undefined}
+            >
+              <Input type="password" value={password} maxLength={200} onChange={(event) => onPasswordChange(event.target.value)} placeholder="至少 12 个字符" />
+            </Field>
+            <Button appearance="primary" type="submit" disabled={!organizationName.trim() || !username.trim() || !usernameValid || password.length < 12 || passwordTooLong || loading}>注册</Button>
+            <Button appearance="subtle" type="button" onClick={() => setRegistering(false)}>返回登录</Button>
+          </form>
+        ) : mode === 'admin' ? (
+          <form onSubmit={onAdminLogin}>
+            <Field label="管理员密钥" required hint="平台管理员密钥可在部署配置中查看或重置。">
+              <Input type="password" value={adminKey} onChange={(event) => onAdminKeyChange(event.target.value)} placeholder="输入平台管理员密钥" />
+            </Field>
+            <Button appearance="primary" type="submit" disabled={!adminKey.trim() || loading}>管理员登录</Button>
+          </form>
+        ) : (
+          <>
+            <form onSubmit={onTenantLogin}>
+              <Field label="用户名" required hint="使用注册时创建的租户账号。">
+                <Input value={username} maxLength={80} onChange={(event) => onUsernameChange(event.target.value)} placeholder="用户名" />
+              </Field>
+              <Field
+                label="密码"
+                required
+                hint="至少 12 个字符。"
+                validationState={passwordTooShort ? 'error' : undefined}
+                validationMessage={passwordTooShort ? `密码至少需要 12 个字符，当前 ${password.length} 个。` : undefined}
+              >
+                <Input type="password" value={password} maxLength={200} onChange={(event) => onPasswordChange(event.target.value)} placeholder="至少 12 个字符" />
+              </Field>
+              <Button appearance="primary" type="submit" disabled={!username.trim() || password.length < 12 || passwordTooLong || loading}>登录</Button>
+              {registrationAllowed && <Button appearance="subtle" type="button" onClick={() => setRegistering(true)}>注册新租户</Button>}
+            </form>
+            {oauthProviders.length > 0 && (
+              <div className="oauth-login-options">
+                <span>或使用组织身份源</span>
+                {oauthProviders.map((provider) => (
+                  <Button key={provider.key} appearance="outline" icon={<ShieldLock24Regular />} onClick={() => { window.location.href = `/api/v1/auth/oauth/${encodeURIComponent(provider.key)}/start?return_path=${encodeURIComponent('/')}` }}>使用 {provider.name} 登录</Button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
-
- function ConnectionPanel_UNUSED_REMOVED({ value, onChange, onSubmit, username, password, onUsernameChange, onPasswordChange, onLogin, loading }: { value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; username: string; password: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onLogin: (event: FormEvent) => void; loading: boolean }) {
+function ConnectionPanel_UNUSED_REMOVED({ value, onChange, onSubmit, username, password, onUsernameChange, onPasswordChange, onLogin, loading }: { value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; username: string; password: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onLogin: (event: FormEvent) => void; loading: boolean }) {
   return <div className="connection-panel"><Key24Regular /><div><strong>连接管理服务</strong><span>平台管理员可使用密钥；租户成员使用账号登录。</span></div><form onSubmit={onSubmit}><input type="password" aria-label="管理员密钥" placeholder="输入平台管理员密钥" value={value} onChange={(event) => onChange(event.target.value)} /><button className="primary" disabled={!value.trim() || loading}>密钥连接</button></form><form onSubmit={onLogin}><input aria-label="用户名" placeholder="用户名" value={username} onChange={(event) => onUsernameChange(event.target.value)} /><input type="password" aria-label="密码" placeholder="密码" value={password} onChange={(event) => onPasswordChange(event.target.value)} /><button className="primary" disabled={!username.trim() || password.length < 12 || loading}>账号登录</button></form></div>
 }
 
@@ -275,7 +361,60 @@ function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
       onComplete()
     } catch (reason) { setError(reason instanceof Error ? reason.message : '操作失败') } finally { setLoading(false) }
   }
-  return <div className="login-page"><div className="login-banner"><div className="login-banner-copy"><img src={centralControlIcon} alt="Class Widgets" /><strong>Class Widgets</strong><span>完成账号设置</span><p>这是该身份源首次登录，请选择账号处理方式。</p></div></div><div className="login-card"><div className="login-heading"><h1>完成 OAuth 登录</h1><p>未找到对应的集控账号。</p></div><div className="segmented login-segment"><button type="button" className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}>注册新账号</button><button type="button" className={mode === 'bind' ? 'selected' : ''} onClick={() => setMode('bind')}>绑定已有账号</button></div>{error && <div className="notice error">{error}</div>}<form onSubmit={submit}><label>集控用户名<input value={username} onChange={(event) => setUsername(event.target.value)} placeholder={mode === 'bind' ? '输入已有用户名' : '设置用户名'} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'bind' ? '验证已有密码' : '至少 12 个字符'} /></label>{mode === 'register' && <label>新建组织名称<input value={organizationName} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" /></label>}<Button appearance="primary" type="submit" disabled={loading || !username.trim() || password.length < 12 || (mode === 'register' && !organizationName.trim())}>{mode === 'bind' ? '验证并绑定' : '创建账号并继续'}</Button></form></div></div>
+  const usernameValid = /^[A-Za-z0-9_.-]+$/.test(username.trim())
+  const passwordTooShort = password.length > 0 && password.length < 12
+  const passwordTooLong = password.length > 200
+  return (
+    <div className="login-page">
+      <div className="login-banner">
+        <div className="login-banner-copy">
+          <img src={centralControlIcon} alt="Class Widgets" />
+          <strong>Class Widgets</strong>
+          <span>完成账号设置</span>
+          <p>这是该身份源首次登录，请选择账号处理方式。</p>
+        </div>
+      </div>
+      <div className="login-card">
+        <div className="login-heading">
+          <h1>完成 OAuth 登录</h1>
+          <p>未找到对应的集控账号。</p>
+        </div>
+        <div className="segmented login-segment">
+          <button type="button" className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}>注册新账号</button>
+          <button type="button" className={mode === 'bind' ? 'selected' : ''} onClick={() => setMode('bind')}>绑定已有账号</button>
+        </div>
+        {error && <div className="notice error">{error}</div>}
+        <form onSubmit={submit}>
+          <Field
+            label="集控用户名"
+            required
+            hint={mode === 'bind' ? '输入已有的集控用户名，用于与当前身份源绑定。' : '1–80 个字符，仅支持字母、数字、下划线、点与连字符。'}
+            validationState={username.length > 0 && !usernameValid ? 'error' : undefined}
+            validationMessage={username.length > 0 && !usernameValid ? '只能包含字母、数字、下划线、点或连字符。' : undefined}
+          >
+            <Input value={username} maxLength={80} onChange={(event) => setUsername(event.target.value)} placeholder={mode === 'bind' ? '输入已有用户名' : '设置用户名'} />
+          </Field>
+          <Field
+            label="密码"
+            required
+            hint={mode === 'bind' ? '输入该集控账号的现有密码，用于验证身份。' : '12–200 个字符，请使用足够复杂的密码。'}
+            validationState={passwordTooShort || passwordTooLong ? 'error' : undefined}
+            validationMessage={passwordTooShort ? `密码至少需要 12 个字符，当前 ${password.length} 个。` : passwordTooLong ? '密码不能超过 200 个字符。' : undefined}
+          >
+            <Input type="password" value={password} maxLength={200} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'bind' ? '验证已有密码' : '至少 12 个字符'} />
+          </Field>
+          {mode === 'register' && (
+            <Field label="新建组织名称" required hint="1–120 个字符，例如：示范中学">
+              <Input value={organizationName} maxLength={120} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" />
+            </Field>
+          )}
+          <Button appearance="primary" type="submit" disabled={loading || !username.trim() || !usernameValid || password.length < 12 || passwordTooLong || (mode === 'register' && !organizationName.trim())}>
+            {mode === 'bind' ? '验证并绑定' : '创建账号并继续'}
+          </Button>
+        </form>
+      </div>
+    </div>
+  )
 }
 
 function TenantManagement({ organizations, groups, devices, onComplete }: { organizations: Organization[]; groups: Group[]; devices: Device[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
