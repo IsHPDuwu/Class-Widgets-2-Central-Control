@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Add24Regular, ArrowSync24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Badge, Button, Card, Field, Input, Switch, Text, Textarea } from '@fluentui/react-components'
+import { Badge, Button, Card, CardHeader, Field, Input, Switch, Text, Textarea, mergeClasses } from '@fluentui/react-components'
 import { api, type OAuthProvider } from './api'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Props = { onComplete: (message: string, tone?: 'success' | 'error') => void }
 const empty = { key: '', name: '', issuer_url: '', client_id: '', client_secret: '', scopes: 'openid profile email', enabled: true, allow_signup: true }
 
 export function OAuthProviderManagement({ onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [providers, setProviders] = useState<OAuthProvider[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [draft, setDraft] = useState(empty)
@@ -23,8 +25,34 @@ export function OAuthProviderManagement({ onComplete }: Props) {
     } catch (error) { onComplete(error instanceof Error ? error.message : '保存 Provider 失败', 'error') }
   }
   async function test(id: string) { try { await api.testOAuthProvider(id); onComplete('OIDC Discovery 连接正常') } catch (error) { onComplete(error instanceof Error ? error.message : 'Provider 测试失败', 'error') } }
-  return <div className="oauth-provider-layout">
-    <section className="data-section oauth-provider-list"><div className="section-heading"><h2>OIDC Providers</h2><Button appearance="subtle" icon={<Add24Regular />} onClick={() => { setSelectedId(''); setDraft(empty) }} /></div>{providers.length === 0 && <div className="empty-command">尚未配置 OIDC Provider</div>}{providers.map((provider) => <Button appearance="transparent" key={provider.id} className={selectedId === provider.id ? 'oauth-provider-row selected' : 'oauth-provider-row'} onClick={() => select(provider)}><span><Text weight="semibold">{provider.name}</Text><Text size={200}>{provider.issuer_url}</Text></span><Badge appearance="tint" color={provider.enabled ? 'success' : 'informative'}>{provider.enabled ? '启用' : '停用'}</Badge></Button>)}</section>
-    <Card className="oauth-provider-form"><form onSubmit={save}><Field label="Provider Key" hint="创建后作为回调地址的一部分"><Input disabled={Boolean(selectedId)} value={draft.key} onChange={(_, data) => setDraft({ ...draft, key: data.value })} /></Field><Field label="显示名称"><Input value={draft.name} onChange={(_, data) => setDraft({ ...draft, name: data.value })} /></Field><Field label="Issuer URL" hint="支持标准 JWKS/ID Token，也支持仅提供 UserInfo 的 OAuth/OIDC 服务"><Input value={draft.issuer_url} onChange={(_, data) => setDraft({ ...draft, issuer_url: data.value })} placeholder="https://www.cpoauth.com" /></Field><Field label="Client ID"><Input value={draft.client_id} onChange={(_, data) => setDraft({ ...draft, client_id: data.value })} /></Field><Field label="Client Secret" hint={selectedId ? '留空表示保持不变' : '使用环境主密钥加密存储'}><Input type="password" value={draft.client_secret} onChange={(_, data) => setDraft({ ...draft, client_secret: data.value })} /></Field><Field label="Scopes"><Textarea resize="vertical" value={draft.scopes} onChange={(_, data) => setDraft({ ...draft, scopes: data.value })} /></Field><div className="oauth-provider-switches"><Switch label="启用登录" checked={draft.enabled} onChange={(_, data) => setDraft({ ...draft, enabled: data.checked })} /><Switch label="允许首登创建待授权账号" checked={draft.allow_signup} onChange={(_, data) => setDraft({ ...draft, allow_signup: data.checked })} /></div><div className="oauth-provider-actions">{selectedId && <Button type="button" icon={<ArrowSync24Regular />} onClick={() => void test(selectedId)}>测试 Discovery</Button>}<Button appearance="primary" type="submit" icon={<Save24Regular />} disabled={!draft.key || !draft.name || !draft.issuer_url || !draft.client_id || (!selectedId && !draft.client_secret)}>保存 Provider</Button></div></form></Card>
+  return <div className={styles.layout}>
+    <Card className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
+        <Text weight="semibold">OIDC Providers</Text>
+        <Button appearance="subtle" icon={<Add24Regular />} aria-label="新建 Provider" onClick={() => { setSelectedId(''); setDraft(empty) }} />
+      </div>
+      <div className={styles.nav}>
+        {providers.length === 0 && <div className={styles.empty}>尚未配置 OIDC Provider</div>}
+        {providers.map((provider) => <Button appearance="subtle" key={provider.id} className={mergeClasses(styles.navButton, selectedId === provider.id && styles.navButtonSelected)} onClick={() => select(provider)}>
+          <span className={styles.navButtonCopy}><Text weight="semibold" block>{provider.name}</Text><Text className={styles.navButtonMeta} size={200} block>{provider.issuer_url}</Text></span>
+          <Badge appearance="tint" color={provider.enabled ? 'success' : 'informative'}>{provider.enabled ? '启用' : '停用'}</Badge>
+        </Button>)}
+      </div>
+    </Card>
+    <div className={styles.main}>
+      <Card>
+        <CardHeader header={<Text as="h2" weight="semibold" size={400}>{selectedId ? '编辑 Provider' : '新建 Provider'}</Text>} />
+        <form className={styles.fields} onSubmit={save}>
+          <Field label="Provider Key" hint="创建后作为回调地址的一部分"><Input disabled={Boolean(selectedId)} value={draft.key} onChange={(_, data) => setDraft({ ...draft, key: data.value })} /></Field>
+          <Field label="显示名称"><Input value={draft.name} onChange={(_, data) => setDraft({ ...draft, name: data.value })} /></Field>
+          <Field label="Issuer URL" hint="支持标准 JWKS/ID Token，也支持仅提供 UserInfo 的 OAuth/OIDC 服务"><Input value={draft.issuer_url} onChange={(_, data) => setDraft({ ...draft, issuer_url: data.value })} placeholder="https://www.cpoauth.com" /></Field>
+          <Field label="Client ID"><Input value={draft.client_id} onChange={(_, data) => setDraft({ ...draft, client_id: data.value })} /></Field>
+          <Field label="Client Secret" hint={selectedId ? '留空表示保持不变' : '使用环境主密钥加密存储'}><Input type="password" value={draft.client_secret} onChange={(_, data) => setDraft({ ...draft, client_secret: data.value })} /></Field>
+          <Field label="Scopes"><Textarea resize="vertical" value={draft.scopes} onChange={(_, data) => setDraft({ ...draft, scopes: data.value })} /></Field>
+          <div className={styles.marker}><Switch label="启用登录" checked={draft.enabled} onChange={(_, data) => setDraft({ ...draft, enabled: data.checked })} /><Switch label="允许首登创建待授权账号" checked={draft.allow_signup} onChange={(_, data) => setDraft({ ...draft, allow_signup: data.checked })} /></div>
+          <div className={styles.commandBarActions}>{selectedId && <Button type="button" icon={<ArrowSync24Regular />} onClick={() => void test(selectedId)}>测试 Discovery</Button>}<Button appearance="primary" type="submit" icon={<Save24Regular />} disabled={!draft.key || !draft.name || !draft.issuer_url || !draft.client_id || (!selectedId && !draft.client_secret)}>保存 Provider</Button></div>
+        </form>
+      </Card>
+    </div>
   </div>
 }

@@ -7,8 +7,9 @@ import {
   Checkmark24Regular,
   Dismiss24Regular,
 } from '@fluentui/react-icons'
-import { Badge, Button, Card, Field, Select, Spinner, Text } from '@fluentui/react-components'
+import { Badge, Button, Card, Field, Select, Spinner, Text, mergeClasses, tokens } from '@fluentui/react-components'
 import { api, type ClassSwapPreparation, type ClassSwapSession, type Device, type Group } from './api'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Subject = { id: string; name: string; color?: string; icon?: string }
 type Entry = { id: string; type: string; startTime: string; endTime: string; subjectId?: string; title?: string }
@@ -27,6 +28,7 @@ function applies(selector: WeekSelector | undefined, week: number, max: number) 
 }
 
 export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [groupFilter, setGroupFilter] = useState('')
   const [deviceId, setDeviceId] = useState('')
   const [requestId, setRequestId] = useState('')
@@ -206,69 +208,71 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
   const active = sessions.filter((session) => session.device_id === deviceId && session.status === 'active')
   const operationCount = active.reduce((sum, session) => sum + session.operations.length, 0)
 
-  return <div className="workspace-stack class-swap-workspace">
-    <Card className="class-swap-device-card">
-      <div className="class-swap-card-heading">
-        <div><Text weight="semibold" size={400}>临时换课</Text><Text size={200}>选择设备并读取它当前使用的课表</Text></div>
+  return <div className={styles.stackLayout}>
+    <Card>
+      <div className={styles.cardHeading}>
+        <div className={styles.stack}><Text weight="semibold" size={400} block>临时换课</Text><Text className={styles.muted} size={200} block>选择设备并读取它当前使用的课表</Text></div>
         {preparation && <Badge appearance="tint" color={preparation.ready ? 'success' : 'informative'}>{preparation.ready ? '课表已同步' : '等待设备上传'}</Badge>}
       </div>
-      <div className="class-swap-device-fields">
+      <div className={styles.row}>
         <Field label="班级筛选"><Select value={groupFilter} onChange={(_, data) => { setGroupFilter(data.value); resetPreparation() }}><option value="">全部班级</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
         <Field label="目标设备"><Select value={deviceId} onChange={(_, data) => { setDeviceId(data.value); resetPreparation() }}>{availableDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}</Select></Field>
-        <div className="class-swap-device-actions"><Button appearance="primary" icon={<CalendarSync24Regular />} disabled={!deviceId || loading} onClick={() => void prepare()}>获取设备课表</Button><Button appearance="secondary" icon={<ArrowSync24Regular />} disabled={!requestId || loading} onClick={() => void refreshPreparation()}>刷新</Button></div>
+        <div className={styles.commandBarActions}><Button appearance="primary" icon={<CalendarSync24Regular />} disabled={!deviceId || loading} onClick={() => void prepare()}>获取设备课表</Button><Button appearance="secondary" icon={<ArrowSync24Regular />} disabled={!requestId || loading} onClick={() => void refreshPreparation()}>刷新</Button></div>
       </div>
       {loading && <Spinner size="tiny" label="正在与设备同步" />}
     </Card>
 
-    {schedule && <Card className="class-swap-dialog">
-      <div className="class-swap-toolbar">
-        <div className="class-swap-context">
+    {schedule && <Card>
+      <div className={styles.cardHeading}>
+        <div className={styles.row}>
           <Field label="来源星期"><Select value={String(day)} onChange={(_, data) => { setDay(Number(data.value)); resetSelection() }}>{DAYS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Select></Field>
           <Field label="周期周"><Select value={String(week)} onChange={(_, data) => { setWeek(Number(data.value)); resetSelection() }}>{Array.from({ length: schedule.meta.maxWeekCycle }, (_, index) => <option key={index + 1} value={index + 1}>{schedule.meta.maxWeekCycle === 2 ? (index === 0 ? '单周' : '双周') : `第 ${index + 1} 周`}</option>)}</Select></Field>
         </div>
         <Button appearance="secondary" icon={<CalendarSync24Regular />} onClick={() => void applyWholeDay()}>整天应用到今天</Button>
       </div>
 
-      <div className="class-swap-picker">
-        <section className="class-swap-lessons">
-          <div className="class-swap-pane-title"><div><Text weight="semibold">当天课程</Text><Text size={200}>点击选择要换的课程</Text></div><Badge appearance="outline">{entries.length} 节</Badge></div>
-          <div className="class-swap-entry-list">
+      <div className={styles.picker}>
+        <section>
+          <div className={styles.paneTitle}><div className={styles.stack}><Text weight="semibold" block>当天课程</Text><Text className={styles.muted} size={200} block>点击选择要换的课程</Text></div><Badge appearance="outline">{entries.length} 节</Badge></div>
+          <div className={styles.entryList}>
             {entries.map((entry) => {
               const selected = entry.id === sourceId || entry.id === targetEntryId
               const subject = subjectById(entry.subjectId)
-              return <Button appearance="subtle" className={`class-swap-entry${selected ? ' selected' : ''}`} key={entry.id} onClick={() => selectEntry(entry)}>
-                <span className="subject-swatch" role="img" aria-label={`${subject?.name ?? '课程'} 标识色`} style={{ background: subject?.color || 'var(--accent)' }} />
-                <span><Text weight="semibold">{entryName(entry)}</Text><Text size={200}>{entry.startTime} – {entry.endTime}</Text></span>
+              return <Button appearance="subtle" className={mergeClasses(styles.entry, selected && styles.entrySelected)} key={entry.id} onClick={() => selectEntry(entry)}>
+                <span className={styles.swatch} role="img" aria-label={`${subject?.name ?? '课程'} 标识色`} style={{ background: subject?.color || tokens.colorBrandBackground }} />
+                <span className={styles.stack}><Text weight="semibold" block>{entryName(entry)}</Text><Text className={styles.muted} size={200} block>{entry.startTime} – {entry.endTime}</Text></span>
                 {entry.id === sourceId && <Badge appearance="filled" color="brand">源课程</Badge>}
                 {entry.id === targetEntryId && <Badge appearance="tint" color="brand">互换目标</Badge>}
               </Button>
             })}
-            {entries.length === 0 && <div className="empty-command">该星期和周期周没有课程</div>}
+            {entries.length === 0 && <div className={styles.empty}>该星期和周期周没有课程</div>}
           </div>
         </section>
 
-        <section className="class-swap-subjects">
-          <div className="class-swap-pane-title"><div><Text weight="semibold">全部科目</Text><Text size={200}>替换为指定科目</Text></div></div>
-          <div className="class-swap-subject-list">
-            {schedule.subjects.map((subject) => <Button appearance="subtle" className={`class-swap-subject${targetSubjectId === subject.id ? ' selected' : ''}`} disabled={!sourceId} key={subject.id} onClick={() => selectSubject(subject)}>
-              <span className="subject-swatch" role="img" aria-label={`${subject.name} 标识色`} style={{ background: subject.color || 'var(--accent)' }} />
-              <span>{subject.name}</span>
+        <section>
+          <div className={styles.paneTitle}><div className={styles.stack}><Text weight="semibold" block>全部科目</Text><Text className={styles.muted} size={200} block>替换为指定科目</Text></div></div>
+          <div className={styles.entryList}>
+            {schedule.subjects.map((subject) => <Button appearance="subtle" className={mergeClasses(styles.entry, targetSubjectId === subject.id && styles.entrySelected)} disabled={!sourceId} key={subject.id} onClick={() => selectSubject(subject)}>
+              <span className={styles.swatch} role="img" aria-label={`${subject.name} 标识色`} style={{ background: subject.color || tokens.colorBrandBackground }} />
+              <Text>{subject.name}</Text>
               {targetSubjectId === subject.id && <Checkmark24Regular />}
             </Button>)}
           </div>
         </section>
       </div>
 
-      <footer className="class-swap-footer">
-        <div className="class-swap-last">{lastSwapText && <><Checkmark24Regular /><span>上次操作：{lastSwapText}</span></>}</div>
-        <div className={`class-swap-guide${ready ? ' ready' : ''}`}>{targetEntry ? <ArrowSwap24Regular /> : ready ? <ArrowRight24Regular /> : null}<span>{guide}</span></div>
-        <div className="class-swap-footer-actions"><Button appearance="secondary" onClick={resetSelection}>{source ? '取消选择' : '取消'}</Button>{ready && <Button appearance="primary" icon={<Checkmark24Regular />} onClick={() => void commitSwap()}>确认换课</Button>}</div>
-      </footer>
+      <div className={styles.footer}>
+        <div className={styles.row}>{lastSwapText && <><Checkmark24Regular /><Text>上次操作：{lastSwapText}</Text></>}</div>
+        <div className={mergeClasses(styles.guide, ready && styles.guideReady)}>{targetEntry ? <ArrowSwap24Regular /> : ready ? <ArrowRight24Regular /> : null}<Text>{guide}</Text></div>
+        <div className={styles.commandBarActions}><Button appearance="secondary" onClick={resetSelection}>{source ? '取消选择' : '取消'}</Button>{ready && <Button appearance="primary" icon={<Checkmark24Regular />} onClick={() => void commitSwap()}>确认换课</Button>}</div>
+      </div>
     </Card>}
 
-    {active.length > 0 && <Card className="class-swap-active-card">
-      <div><Text weight="semibold">该设备今天的临时换课</Text><Text size={200}>已下发 {operationCount} 个操作，可继续换课或统一恢复。</Text></div>
-      <Button appearance="secondary" icon={<Dismiss24Regular />} onClick={() => void restore(active[0].id)}>立即恢复该设备</Button>
+    {active.length > 0 && <Card>
+      <div className={styles.cardHeading}>
+        <div className={styles.stack}><Text weight="semibold" block>该设备今天的临时换课</Text><Text className={styles.muted} size={200} block>已下发 {operationCount} 个操作，可继续换课或统一恢复。</Text></div>
+        <Button appearance="secondary" icon={<Dismiss24Regular />} onClick={() => void restore(active[0].id)}>立即恢复该设备</Button>
+      </div>
     </Card>}
   </div>
 }

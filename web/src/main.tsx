@@ -37,9 +37,9 @@ const lightTheme = {
 
 const darkTheme = {
   ...createDarkTheme(classWidgetsBrand),
-  colorBrandBackground: '#66CCFF',
-  colorBrandBackgroundHover: '#82D5FF',
-  colorBrandBackgroundPressed: '#3EADCB',
+  colorBrandBackground: '#004B5E',
+  colorBrandBackgroundHover: '#006278',
+  colorBrandBackgroundPressed: '#003544',
   colorBrandForeground1: '#82D5FF',
   colorBrandForeground2: '#66CCFF',
 }

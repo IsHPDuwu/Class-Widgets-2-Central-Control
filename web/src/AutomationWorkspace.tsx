@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Add24Regular, ArrowRepeatAll24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Checkbox, Dropdown, Field, Input, Option, Text } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, Dropdown, Field, Input, Option, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type AutomationRule, type Device, type Group, type PolicyRecord, type ScheduleRecord } from './api'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Props = { organizationId: string; groups: Group[]; devices: Device[]; onComplete: (message: string, tone?: 'success' | 'error') => void }
 
@@ -12,6 +13,7 @@ const emptyRule = (organizationId: string): Record<string, unknown> => ({
 })
 
 export function AutomationWorkspace({ organizationId, groups, devices, onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [rules, setRules] = useState<AutomationRule[]>([])
   const [policies, setPolicies] = useState<PolicyRecord[]>([])
   const [schedules, setSchedules] = useState<ScheduleRecord[]>([])
@@ -26,7 +28,23 @@ export function AutomationWorkspace({ organizationId, groups, devices, onComplet
   async function save(event: FormEvent) { event.preventDefault(); try { const body = { ...draft, group_id: targetKind === 'group' ? draft.group_id : null, device_id: targetKind === 'device' ? draft.device_id : null, action: { type: draft.actionType ?? 'command', payload: actionPayload } }; if (selectedId) await api.updateAutomation(selectedId, body); else await api.createAutomation(body); onComplete('自动化已保存'); setSelectedId(''); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '保存自动化失败', 'error') } }
   async function remove() { if (!selectedId || !window.confirm('确定删除此自动化规则？')) return; try { await api.deleteAutomation(selectedId); setSelectedId(''); setDraft(emptyRule(organizationId)); onComplete('自动化已删除'); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '删除自动化失败', 'error') } }
   const targets = targetKind === 'group' ? groups : devices
-  return <div className="automation-layout"><section className="data-section automation-list"><div className="section-heading"><h2>自动化规则</h2><Button appearance="subtle" icon={<Add24Regular />} aria-label="新建自动化" onClick={() => { setSelectedId(''); setDraft(emptyRule(organizationId)); setActionPayload({ command_type: 'refresh_status' }) }} /></div>{rules.map((rule) => <Button appearance="transparent" className={selectedId === rule.id ? 'report-row selected' : 'report-row'} key={rule.id} onClick={() => select(rule)} icon={<ArrowRepeatAll24Regular />}><div><Text weight="semibold">{rule.name}</Text><Text size={200}>{rule.enabled ? '已启用' : '已停用'} · {rule.trigger_type}</Text></div></Button>)}</section><section className="form-section automation-editor"><form onSubmit={save}><h2>{selectedId ? '编辑自动化' : '新建自动化'}</h2>
+  return <div className={styles.layout}>
+    <Card className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
+        <Text weight="semibold">自动化规则</Text>
+        <Button appearance="subtle" icon={<Add24Regular />} aria-label="新建自动化" onClick={() => { setSelectedId(''); setDraft(emptyRule(organizationId)); setActionPayload({ command_type: 'refresh_status' }) }} />
+      </div>
+      <div className={styles.nav}>
+        {rules.map((rule) => <Button appearance="subtle" className={mergeClasses(styles.navButton, selectedId === rule.id && styles.navButtonSelected)} key={rule.id} onClick={() => select(rule)} icon={<ArrowRepeatAll24Regular />}>
+          <span className={styles.navButtonCopy}><Text weight="semibold" block>{rule.name}</Text><Text className={styles.navButtonMeta} size={200} block>{rule.enabled ? '已启用' : '已停用'} · {rule.trigger_type}</Text></span>
+        </Button>)}
+        {rules.length === 0 && <div className={styles.empty}>暂无自动化规则</div>}
+      </div>
+    </Card>
+    <div className={styles.main}>
+    <Card>
+    <CardHeader header={<Text as="h2" weight="semibold" size={400}>{selectedId ? '编辑自动化' : '新建自动化'}</Text>} />
+    <form className={styles.fields} onSubmit={save}>
 <Field label="名称" required hint={selectedId ? undefined : '为规则取一个便于识别的名称。'}>
   <Input value={draft.name ?? ''} onChange={(_, data) => update('name', data.value)} placeholder="例如：早读上课提醒" />
 </Field>
@@ -89,5 +107,8 @@ export function AutomationWorkspace({ organizationId, groups, devices, onComplet
     {policies.map((policy) => <Option key={policy.id} value={policy.id} text={`${policy.name}（r${policy.revision}）`}>{policy.name}（r{policy.revision}）</Option>)}
   </Dropdown>
 </Field>}
-<Checkbox label="启用规则" checked={Boolean(draft.enabled)} onChange={(_, data) => update('enabled', Boolean(data.checked))} /><div className="form-actions"><Button appearance="subtle" icon={<Delete24Regular />} aria-label="删除自动化" title="删除自动化" disabled={!selectedId} onClick={() => void remove()} /><Button appearance="primary" icon={<Save24Regular />} type="submit">保存</Button></div></form></section></div>
+<Checkbox label="启用规则" checked={Boolean(draft.enabled)} onChange={(_, data) => update('enabled', Boolean(data.checked))} /><div className={styles.commandBarActions}><Button appearance="subtle" icon={<Delete24Regular />} aria-label="删除自动化" title="删除自动化" disabled={!selectedId} onClick={() => void remove()} /><Button appearance="primary" icon={<Save24Regular />} type="submit">保存</Button></div></form>
+    </Card>
+    </div>
+  </div>
 }

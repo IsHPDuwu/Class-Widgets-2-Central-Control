@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown20Regular, ChevronRight20Regular, Save24Regular, ShieldLock24Regular } from '@fluentui/react-icons'
-import { Badge, Button, Checkbox, Dropdown, Field, Option, Spinner, Switch, Text } from '@fluentui/react-components'
+import { Badge, Button, Card, CardHeader, Checkbox, Dropdown, Field, Option, Spinner, Switch, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type AdminUser, type Device, type Group, type Organization, type PermissionCatalog, type PermissionGrant } from './api'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Props = { organizations: Organization[]; groups: Group[]; devices: Device[]; users: AdminUser[]; onUsersChanged: () => void; onComplete: (message: string, tone?: 'success' | 'error') => void }
 type Scope = { type: 'organization' | 'group' | 'device'; id: string | null; label: string }
 
 export function AccessManagement({ organizations, groups, devices, users, onUsersChanged, onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [catalog, setCatalog] = useState<PermissionCatalog | null>(null)
   const [userId, setUserId] = useState('')
   const [organizationId, setOrganizationId] = useState('')
@@ -67,30 +69,48 @@ export function AccessManagement({ organizations, groups, devices, users, onUser
     finally { setLoading(false) }
   }
 
-  return <section className="access-management">
-    <div className="access-toolbar">
-      <Field label="成员"><Dropdown value={selectedUser?.display_name || selectedUser?.username || ''} selectedOptions={userId ? [userId] : []} onOptionSelect={(_, data) => setUserId(String(data.optionValue))}>{users.map((user) => <Option key={user.id} value={user.id} text={user.display_name || user.username}>{user.display_name || user.username}{user.authorization_status === 'pending' ? '（待授权）' : ''}</Option>)}</Dropdown></Field>
-      <Field label="组织"><Dropdown value={organizations.find((item) => item.id === organizationId)?.name || ''} selectedOptions={organizationId ? [organizationId] : []} onOptionSelect={(_, data) => setOrganizationId(String(data.optionValue))}>{organizations.map((organization) => <Option key={organization.id} value={organization.id}>{organization.name}</Option>)}</Dropdown></Field>
+  return <Card>
+    <CardHeader header={<Text as="h2" weight="semibold" size={400}>成员权限</Text>} description={<Text size={200}>父节点勾选会授予该模块全部动作；组织授权向班级和设备继承。</Text>} action={<Button appearance="primary" icon={<Save24Regular />} disabled={!userId || loading} onClick={() => void save()}>保存权限</Button>} />
+    <div className={styles.row}>
+      <Field label="成员" className={styles.commandBarField}><Dropdown value={selectedUser?.display_name || selectedUser?.username || ''} selectedOptions={userId ? [userId] : []} onOptionSelect={(_, data) => setUserId(String(data.optionValue))}>{users.map((user) => <Option key={user.id} value={user.id} text={user.display_name || user.username}>{user.display_name || user.username}{user.authorization_status === 'pending' ? '（待授权）' : ''}</Option>)}</Dropdown></Field>
+      <Field label="组织" className={styles.commandBarField}><Dropdown value={organizations.find((item) => item.id === organizationId)?.name || ''} selectedOptions={organizationId ? [organizationId] : []} onOptionSelect={(_, data) => setOrganizationId(String(data.optionValue))}>{organizations.map((organization) => <Option key={organization.id} value={organization.id}>{organization.name}</Option>)}</Dropdown></Field>
       <Switch checked={active} onChange={(_, data) => setActive(data.checked)} label={active ? '账号已激活' : '待授权'} />
-      <div className="access-template-actions"><Button appearance="secondary" onClick={() => applyTemplate('viewer')}>只读模板</Button><Button appearance="secondary" onClick={() => applyTemplate('operator')}>操作员模板</Button><Button appearance="secondary" onClick={() => applyTemplate('admin')}>组织管理员模板</Button></div>
+      <div className={styles.commandBarActions}><Button appearance="secondary" onClick={() => applyTemplate('viewer')}>只读模板</Button><Button appearance="secondary" onClick={() => applyTemplate('operator')}>操作员模板</Button><Button appearance="secondary" onClick={() => applyTemplate('admin')}>组织管理员模板</Button></div>
     </div>
     {loading && <Spinner size="tiny" />}
-    {catalog && <div className="permission-tree" role="tree" aria-label="权限树">
-      <div className="permission-root"><ShieldLock24Regular /><Text weight="semibold">{selectedUser?.display_name || selectedUser?.username || '请选择成员'}</Text><Badge appearance="tint">{grants.length} 项授权</Badge></div>
-      <div className="permission-branch">
-        <Button appearance="transparent" className="tree-expander" onClick={() => toggleExpanded('platform')} icon={expanded.has('platform') ? <ChevronDown20Regular /> : <ChevronRight20Regular />}><Text weight="semibold">平台权限</Text></Button>
-        {expanded.has('platform') && <div className="permission-children">{catalog.platform.map((item) => <Checkbox key={item.key} label={item.label} checked={checked(item.key, true)} onChange={(_, data) => setPermission(item.key, Boolean(data.checked), true)} />)}</div>}
+    {catalog && <div className={styles.tree} role="tree" aria-label="权限树">
+      <div className={styles.treeRoot}><ShieldLock24Regular /><Text weight="semibold">{selectedUser?.display_name || selectedUser?.username || '请选择成员'}</Text><Badge appearance="tint">{grants.length} 项授权</Badge></div>
+      <div className={styles.treeBranch}>
+        <Button appearance="transparent" className={styles.treeNode} onClick={() => toggleExpanded('platform')} icon={expanded.has('platform') ? <ChevronDown20Regular /> : <ChevronRight20Regular />}><Text weight="semibold">平台权限</Text></Button>
+        {expanded.has('platform') && <div className={styles.treeChildren}>{catalog.platform.map((item) => <Checkbox key={item.key} label={item.label} checked={checked(item.key, true)} onChange={(_, data) => setPermission(item.key, Boolean(data.checked), true)} />)}</div>}
       </div>
-      <div className="permission-branch">
-        <Button appearance="transparent" className="tree-expander" onClick={() => toggleExpanded('organization')} icon={expanded.has('organization') ? <ChevronDown20Regular /> : <ChevronRight20Regular />}><Text weight="semibold">{organizations.find((item) => item.id === organizationId)?.name || '组织权限'}</Text><span>{organizationGrants.length} 项</span></Button>
-        {expanded.has('organization') && <div className="permission-resource-layout"><div className="permission-resources"><Button appearance="transparent" className={`permission-resource ${scope.type === 'organization' ? 'selected' : ''}`} onClick={() => chooseScope({ type: 'organization', id: null, label: '整个组织' })}>整个组织</Button>{organizationGroups.map((group) => <div key={group.id} className="permission-resource-group"><Button appearance="transparent" className={`permission-resource ${scope.type === 'group' && scope.id === group.id ? 'selected' : ''}`} onClick={() => chooseScope({ type: 'group', id: group.id, label: group.name })}>{group.name}</Button><div>{devices.filter((device) => device.group_id === group.id).map((device) => <Button appearance="transparent" key={device.id} className={`permission-resource device ${scope.type === 'device' && scope.id === device.id ? 'selected' : ''}`} onClick={() => chooseScope({ type: 'device', id: device.id, label: device.name })}>{device.name}</Button>)}</div></div>)}</div><div className="permission-children modules"><Text weight="semibold">当前范围：{scope.label}</Text>{catalog.organization.map((module) => {
-          const keys = module.actions.map((action) => action.key)
-          const open = expanded.has(module.key)
-          const supported = module.resource_types.includes(scope.type)
-          return <div className={`permission-module ${supported ? '' : 'unsupported'}`} key={module.key}><div className="permission-module-row"><Button appearance="transparent" className="tree-expander" disabled={!supported} onClick={() => toggleExpanded(module.key)} icon={open ? <ChevronDown20Regular /> : <ChevronRight20Regular />} /><Checkbox disabled={!supported} label={module.label} checked={supported ? moduleState(keys) : false} onChange={(_, data) => setModule(keys, Boolean(data.checked))} /></div>{open && supported && <div className="permission-actions">{module.actions.map((action) => <Checkbox key={action.key} label={action.label} checked={checked(action.key)} onChange={(_, data) => setPermission(action.key, Boolean(data.checked))} />)}</div>}</div>
-        })}</div></div>}
+      <div className={styles.treeBranch}>
+        <Button appearance="transparent" className={styles.treeNode} onClick={() => toggleExpanded('organization')} icon={expanded.has('organization') ? <ChevronDown20Regular /> : <ChevronRight20Regular />}><Text weight="semibold">{organizations.find((item) => item.id === organizationId)?.name || '组织权限'}</Text><Badge appearance="outline">{organizationGrants.length} 项</Badge></Button>
+        {expanded.has('organization') && <div className={styles.treeSplit}>
+          <div className={styles.treeResources}>
+            <Button appearance="transparent" className={mergeClasses(styles.resource, scope.type === 'organization' && styles.resourceSelected)} onClick={() => chooseScope({ type: 'organization', id: null, label: '整个组织' })}>整个组织</Button>
+            {organizationGroups.map((group) => <div key={group.id} className={styles.treeSubList}>
+              <Button appearance="transparent" className={mergeClasses(styles.resource, scope.type === 'group' && scope.id === group.id && styles.resourceSelected)} onClick={() => chooseScope({ type: 'group', id: group.id, label: group.name })}>{group.name}</Button>
+              <div>{devices.filter((device) => device.group_id === group.id).map((device) => <Button appearance="transparent" key={device.id} className={mergeClasses(styles.resource, styles.resourceChild, scope.type === 'device' && scope.id === device.id && styles.resourceSelected)} onClick={() => chooseScope({ type: 'device', id: device.id, label: device.name })}>{device.name}</Button>)}</div>
+            </div>)}
+          </div>
+          <div className={styles.treeChildren}>
+            <Text weight="semibold">当前范围：{scope.label}</Text>
+            {catalog.organization.map((module) => {
+              const keys = module.actions.map((action) => action.key)
+              const open = expanded.has(module.key)
+              const supported = module.resource_types.includes(scope.type)
+              return <div className={mergeClasses(styles.module, !supported && styles.moduleUnsupported)} key={module.key}>
+                <div className={styles.row}>
+                  <Button appearance="transparent" disabled={!supported} onClick={() => toggleExpanded(module.key)} icon={open ? <ChevronDown20Regular /> : <ChevronRight20Regular />} aria-label={module.label} />
+                  <Checkbox disabled={!supported} label={module.label} checked={supported ? moduleState(keys) : false} onChange={(_, data) => setModule(keys, Boolean(data.checked))} />
+                </div>
+                {open && supported && <div className={styles.checks}>{module.actions.map((action) => <Checkbox key={action.key} label={action.label} checked={checked(action.key)} onChange={(_, data) => setPermission(action.key, Boolean(data.checked))} />)}</div>}
+              </div>
+            })}
+          </div>
+        </div>}
       </div>
     </div>}
-    <div className="access-save"><Text size={200}>父节点勾选会授予该模块全部动作；组织授权向班级和设备继承。</Text><Button appearance="primary" icon={<Save24Regular />} disabled={!userId || loading} onClick={() => void save()}>保存权限</Button></div>
-  </section>
+  </Card>
 }

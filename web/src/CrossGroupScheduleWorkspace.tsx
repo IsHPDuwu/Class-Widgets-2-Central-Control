@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Save24Regular, Send24Regular } from '@fluentui/react-icons'
-import { Button, Card, Field, Select, Text } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Field, Select, Text } from '@fluentui/react-components'
 import { api, type ClassGroup, type Group, type ScheduleRecord, type TimelineRecord } from './api'
 import { ClassSelector } from './ClassSelector'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Course = { id: string; name: string; simplifiedName?: string; teacher?: string; icon?: string; color?: string; location?: string; isLocalClassroom: boolean }
 type Entry = { id: string; sourceEntryId?: string; type: 'class' | 'break' | 'activity' | 'free' | 'preparation'; startTime: string; endTime: string; title?: string; subjectId?: string }
@@ -54,6 +55,7 @@ function assignmentFor(schedule: Schedule, day: Day, entry: Entry, week: number)
 }
 
 export function CrossGroupScheduleWorkspace({ organizationId, groups, classGroups, onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [timelines, setTimelines] = useState<TimelineRecord[]>([])
   const [records, setRecords] = useState<ScheduleRecord[]>([])
   const [courses, setCourses] = useState<Course[]>([])
@@ -153,11 +155,42 @@ export function CrossGroupScheduleWorkspace({ organizationId, groups, classGroup
     }
   }
 
-  return <div className="cross-group-workspace"><Card className="cross-group-panel">
-    <div className="section-heading"><div><h2>按天拉通排课</h2><span>共用一条时间线，按天为多个班级同时安排课程。</span></div><div className="form-actions"><Button appearance="secondary" icon={<Save24Regular />} onClick={() => void save(false)}>保存草稿</Button><Button appearance="primary" icon={<Send24Regular />} onClick={() => void save(true)}>保存并发布</Button></div></div>
-    <div className="cross-group-toolbar"><Field label="公共时间线"><Select value={timelineId} onChange={(_, data) => { setTimelineId(data.value); setSelectedGroups([]); setDrafts({}); setWeek(1) }}><option value="">选择时间线</option>{timelines.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></Field><div className="group-picker"><span className="group-picker-label">参与班级</span><ClassSelector groups={groups} classGroups={classGroups} selected={selectedGroups} onChange={selectGroups} idPrefix="cross-group" /></div></div>
-    <div className="day-pills fluent-day-pills">{DAYS.map((label, index) => <Button appearance={day === index + 1 ? 'primary' : 'secondary'} key={label} onClick={() => setDay(index + 1)}>{label}</Button>)}</div>
-    <div className="week-toolbar"><Button appearance="subtle" disabled={week <= 1} onClick={() => setWeek(week - 1)}>上一周</Button><Text weight="semibold">循环第 {week} 周</Text><Button appearance="subtle" disabled={!selectedTimeline || week >= cycleWeeks} onClick={() => setWeek(week + 1)}>下一周</Button></div>
-    {!selectedTimeline ? <div className="empty-command">请先选择公共时间线。</div> : !selectedGroups.length ? <div className="empty-command">请选择参与排课的班级。</div> : <div className="cross-group-grid" style={{ gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedGroups.length}, minmax(180px, 1fr))` }}><div className="grid-head">时间段</div>{selectedGroups.map((groupId) => <div className="grid-head" key={groupId}>{groups.find((item) => item.id === groupId)?.name ?? '未命名班级'}</div>)}{entries.map((entry, index) => <div className="cross-group-row" key={entry.id}><div className="time-cell"><Text weight="semibold">第 {index + 1} 节</Text><Text size={200}>{entry.startTime}–{entry.endTime}</Text></div>{selectedGroups.map((groupId) => { const current = drafts[groupId] ? activeDay(drafts[groupId], day, week) : undefined; const currentEntry = current?.entries[index] ?? current?.entries.find((item) => (item.sourceEntryId ?? item.id) === entry.id); const value = currentEntry?.subjectId ?? (current && currentEntry ? assignmentFor(drafts[groupId], current, currentEntry, week)?.subjectId ?? '' : ''); return <Select key={groupId} aria-label={`${groups.find((item) => item.id === groupId)?.name ?? '班级'} 第 ${index + 1} 节`} value={value} disabled={!current} onChange={(_, data) => setCell(groupId, entry.id, index, data.value)}><option value="">未设置</option>{courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}</Select> })}</div>)}</div>}
-  </Card></div>
+  return <Card>
+    <CardHeader
+      header={<Text as="h2" weight="semibold" size={400}>按天拉通排课</Text>}
+      description={<Text size={200}>共用一条时间线，按天为多个班级同时安排课程。</Text>}
+    />
+    <div className={styles.commandBarActions}>
+      <Button appearance="secondary" icon={<Save24Regular />} onClick={() => void save(false)}>保存草稿</Button>
+      <Button appearance="primary" icon={<Send24Regular />} onClick={() => void save(true)}>保存并发布</Button>
+    </div>
+    <div className={styles.row}>
+      <Field label="公共时间线"><Select value={timelineId} onChange={(_, data) => { setTimelineId(data.value); setSelectedGroups([]); setDrafts({}); setWeek(1) }}><option value="">选择时间线</option>{timelines.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></Field>
+      <Field className={styles.grow} label="参与班级"><ClassSelector groups={groups} classGroups={classGroups} selected={selectedGroups} onChange={selectGroups} idPrefix="cross-group" /></Field>
+    </div>
+    <div className={styles.marker}>{DAYS.map((label, index) => <Button appearance={day === index + 1 ? 'primary' : 'secondary'} key={label} onClick={() => setDay(index + 1)}>{label}</Button>)}</div>
+    <div className={styles.commandBarActions} style={{ justifyContent: 'flex-start' }}><Button appearance="subtle" disabled={week <= 1} onClick={() => setWeek(week - 1)}>上一周</Button><Text weight="semibold">循环第 {week} 周</Text><Button appearance="subtle" disabled={!selectedTimeline || week >= cycleWeeks} onClick={() => setWeek(week + 1)}>下一周</Button></div>
+    <div className={styles.gridScroll}>
+      {!selectedTimeline
+        ? <div className={styles.empty}>请先选择公共时间线。</div>
+        : !selectedGroups.length
+          ? <div className={styles.empty}>请选择参与排课的班级。</div>
+          : <div className={styles.weekGrid} style={{ gridTemplateColumns: `minmax(180px, 1fr) repeat(${selectedGroups.length}, minmax(180px, 1fr))` }}>
+            <div className={styles.gridHead}>时间段</div>
+            {selectedGroups.map((groupId) => <div className={styles.gridHead} key={groupId}>{groups.find((item) => item.id === groupId)?.name ?? '未命名班级'}</div>)}
+            {entries.map((entry, index) => <div className={styles.weekRow} key={entry.id}>
+              <div className={styles.timeCell}><Text weight="semibold" block>第 {index + 1} 节</Text><Text className={styles.muted} size={200} block>{entry.startTime}–{entry.endTime}</Text></div>
+              {selectedGroups.map((groupId) => {
+                const current = drafts[groupId] ? activeDay(drafts[groupId], day, week) : undefined
+                const currentEntry = current?.entries[index] ?? current?.entries.find((item) => (item.sourceEntryId ?? item.id) === entry.id)
+                const value = currentEntry?.subjectId ?? (current && currentEntry ? assignmentFor(drafts[groupId], current, currentEntry, week)?.subjectId ?? '' : '')
+                return <Select key={groupId} aria-label={`${groups.find((item) => item.id === groupId)?.name ?? '班级'} 第 ${index + 1} 节`} value={value} disabled={!current} onChange={(_, data) => setCell(groupId, entry.id, index, data.value)}>
+                  <option value="">未设置</option>
+                  {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
+                </Select>
+              })}
+            </div>)}
+          </div>}
+    </div>
+  </Card>
 }

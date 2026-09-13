@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Add24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Checkbox, Field, Input, Text } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, Field, Input, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type ClassGroup, type Group } from './api'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Props = { organizationId: string; groups: Group[]; onComplete: (message: string, tone?: 'success' | 'error') => void }
 
 export function ClassGroupWorkspace({ organizationId, groups, onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [items, setItems] = useState<ClassGroup[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [name, setName] = useState('新分组')
@@ -32,8 +34,41 @@ export function ClassGroupWorkspace({ organizationId, groups, onComplete }: Prop
     try { await api.deleteClassGroup(selectedId); reset(); await load(); onComplete('分组已删除') } catch (error) { onComplete(error instanceof Error ? error.message : '删除分组失败', 'error') }
   }
 
-  return <div className="course-resource-workspace">
-    <Card className="resource-sidebar"><CardHeader header={<Text weight="semibold">分组</Text>} action={<Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>} /><div className="resource-nav">{items.map((item) => <Button className={selectedId === item.id ? 'selected' : ''} appearance="subtle" key={item.id} onClick={() => open(item)}><span><Text weight="semibold">{item.name}</Text><Text size={200}>{item.group_ids.length} 个班级</Text></span></Button>)}</div></Card>
-    <Card className="form-section"><div className="editor-commandbar"><Field label="分组名称"><Input value={name} onChange={(_, data) => setName(data.value)} /></Field><div className="form-actions"><Button appearance="secondary" icon={<Delete24Regular />} disabled={!selectedId} onClick={() => void remove()}>删除</Button><Button appearance="primary" icon={<Save24Regular />} onClick={() => void save()}>保存</Button></div></div><Field label="包含的班级"><div className="checks fluent-checks">{groups.map((group) => <Checkbox key={group.id} checked={memberIds.includes(group.id)} onChange={(_, data) => toggle(group.id, data.checked === true)} label={group.name} />)}</div></Field></Card>
+  return <div className={styles.layout}>
+    <Card className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
+        <Text weight="semibold">分组</Text>
+        <Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>
+      </div>
+      <div className={styles.nav}>
+        {items.map((item) => <Button
+          key={item.id}
+          appearance="subtle"
+          className={mergeClasses(styles.navButton, selectedId === item.id && styles.navButtonSelected)}
+          onClick={() => open(item)}
+        >
+          <span className={styles.navButtonCopy}>
+            <Text weight="semibold" block>{item.name}</Text>
+            <Text className={styles.navButtonMeta} size={200} block>{item.group_ids.length} 个班级</Text>
+          </span>
+        </Button>)}
+        {items.length === 0 && <div className={styles.empty}>暂无分组</div>}
+      </div>
+    </Card>
+    <div className={styles.main}>
+      <Card>
+        <CardHeader header={<Text as="h2" weight="semibold" size={400}>{selectedId ? '编辑分组' : '新建分组'}</Text>} />
+        <div className={styles.commandBar}>
+          <Field label="分组名称" className={styles.commandBarField}><Input value={name} onChange={(_, data) => setName(data.value)} /></Field>
+          <div className={styles.commandBarActions}>
+            <Button appearance="secondary" icon={<Delete24Regular />} disabled={!selectedId} onClick={() => void remove()}>删除</Button>
+            <Button appearance="primary" icon={<Save24Regular />} onClick={() => void save()}>保存</Button>
+          </div>
+        </div>
+        <Field label="包含的班级">
+          <div className={styles.checks}>{groups.map((group) => <Checkbox key={group.id} checked={memberIds.includes(group.id)} onChange={(_, data) => toggle(group.id, data.checked === true)} label={group.name} />)}</div>
+        </Field>
+      </Card>
+    </div>
   </div>
 }

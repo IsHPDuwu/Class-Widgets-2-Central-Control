@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, CardHeader, Checkbox, Dropdown, Input, Option, Switch, Text, Textarea } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, Dropdown, Field, Input, Option, Switch, Text, Textarea, mergeClasses } from '@fluentui/react-components'
 import { Add24Regular, ArrowUpload24Regular, Copy24Regular, Save24Regular, Send24Regular } from '@fluentui/react-icons'
 import { api, type ClassGroup, type Group, type PolicyRecord } from './api'
 import { ClassSelector } from './ClassSelector'
+import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Kind = 'boolean' | 'number' | 'string' | 'json'
 type ConfigField = { key: string; label: string; section: string; kind: Kind; hint?: string }
@@ -38,15 +39,6 @@ const CONFIG_FIELDS: ConfigField[] = [
   { section: '外观', key: 'preferences.current_preset', label: '当前组件预设', kind: 'string' },
   { section: '外观', key: 'preferences.font', label: '字体', kind: 'string' },
   { section: '外观', key: 'preferences.font_weight', label: '字重', kind: 'number' },
-  { section: '交互', key: 'interactions.hover_fade', label: '悬停淡出', kind: 'boolean' },
-  { section: '交互', key: 'interactions.hide.state', label: '启用自动隐藏', kind: 'boolean' },
-  { section: '交互', key: 'interactions.hide.in_class', label: '上课时隐藏', kind: 'boolean' },
-  { section: '交互', key: 'interactions.hide.clicked', label: '点击时隐藏', kind: 'boolean' },
-  { section: '交互', key: 'interactions.hide.maximized', label: '窗口最大化时隐藏', kind: 'boolean' },
-  { section: '交互', key: 'interactions.hide.fullscreen', label: '全屏时隐藏', kind: 'boolean' },
-  { section: '交互', key: 'interactions.hide.mini_mode', label: '迷你模式时隐藏', kind: 'boolean' },
-  { section: '插件', key: 'plugins.enabled', label: '已启用插件 ID', kind: 'json' },
-  { section: '插件', key: 'plugins.configs', label: '全部插件配置', kind: 'json', hint: 'JSON 对象；可显式控制各插件的动态配置' },
   { section: '网络', key: 'network.mirrors', label: '镜像地址', kind: 'json' },
   { section: '网络', key: 'network.current_mirror', label: '当前镜像', kind: 'string' },
   { section: '网络', key: 'network.mirror_enabled', label: '启用镜像', kind: 'boolean' },
@@ -74,11 +66,12 @@ function getNestedValue(source: Record<string, unknown>, key: string): { found: 
 }
 
 export function ConfigWorkspace({ organizationId, groups, classGroups, onComplete }: Props) {
+  const styles = useWorkspaceStyles()
   const [records, setRecords] = useState<PolicyRecord[]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [name, setName] = useState('新配置')
   const [values, setValues] = useState<Record<string, string>>({})
-  const [managed, setManaged] = useState<Set<string>>(new Set())
+    const [managed, setManaged] = useState<Set<string>>(new Set())
   const [locked, setLocked] = useState<Set<string>>(new Set())
   const [readonly, setReadonly] = useState(true)
   const [publishGroups, setPublishGroups] = useState<string[]>([])
@@ -113,7 +106,101 @@ export function ConfigWorkspace({ organizationId, groups, classGroups, onComplet
   async function clone(record: PolicyRecord) { try { const result = await api.clonePolicy(record.id, `${record.name} - 副本`); onComplete(`配置副本 r${result.revision} 已保存`); load() } catch (error) { onComplete(error instanceof Error ? error.message : '克隆失败', 'error') } }
   async function publish(record: PolicyRecord, ids: string[]) { try { await api.assignPolicy(record.id, ids); onComplete(ids.length ? `“${record.name}”已发布` : `“${record.name}”已取消发布`); load() } catch (error) { onComplete(error instanceof Error ? error.message : '发布失败', 'error') } }
 
-  return <div className="config-workspace"><Card className="resource-sidebar"><CardHeader header={<Text weight="semibold">配置资源</Text>} action={<Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>} /><div className="resource-nav">{records.map((record) => <article className={editingId === record.id ? 'selected' : ''} key={record.id}><Button appearance="transparent" className="resource-main" onClick={() => edit(record)}><Text weight="semibold">{record.name}</Text><Text size={200}>r{record.revision} · {record.group_ids.length ? `${record.group_ids.length} 个班级` : '草稿'}</Text></Button><Button appearance="transparent" title="克隆" icon={<Copy24Regular />} onClick={() => void clone(record)} /></article>)}</div></Card><section className="config-editor form-section"><div className="editor-commandbar"><div><Input aria-label="配置名称" value={name} onChange={(_, data) => setName(data.value)} /><span>所有 RootConfig 键均已显性列出；启用后才下发</span></div><Button appearance="outline" icon={<ArrowUpload24Regular />} className="import-button">导入 JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importConfig(event.target.files?.[0]); event.target.value = '' }} /></Button><Button appearance="outline" icon={<Save24Regular />} onClick={() => void save(false)}>仅保存</Button><Button appearance="primary" disabled={!publishGroups.length} icon={<Send24Regular />} onClick={() => void save(true)}>保存并发布</Button></div><div className="meta-strip"><div className="setting-row"><div><Text weight="semibold">课表只读</Text><span>独立于配置键生效</span></div><Switch checked={readonly} onChange={(_, data) => setReadonly(data.checked)} /></div><fieldset><legend>发布目标</legend><ClassSelector groups={groups} classGroups={classGroups} selected={publishGroups} onChange={setPublishGroups} idPrefix="policy-target" /></fieldset></div><div className="config-sections">{sections.map((item) => <Button appearance="subtle" className={section === item ? 'active' : ''} key={item} onClick={() => setSection(item)}>{item}<span>{CONFIG_FIELDS.filter((field) => field.section === item && managed.has(field.key)).length}/{CONFIG_FIELDS.filter((field) => field.section === item).length}</span></Button>)}</div><div className="explicit-config-list">{CONFIG_FIELDS.filter((field) => field.section === section).map((field) => { const enabled = managed.has(field.key); const value = values[field.key] ?? displayValue(defaultValue(field.kind), field.kind); return <article key={field.key} className={enabled ? 'managed' : ''}><div className="manage-toggle"><Checkbox checked={enabled} onChange={(_, data) => { const next = new Set(managed); if (data.checked) { next.add(field.key); setValues({ ...values, [field.key]: value }) } else { next.delete(field.key); const locks = new Set(locked); locks.delete(field.key); setLocked(locks) } setManaged(next) }} /><div><Text weight="semibold">{field.label}</Text><code>{field.key}</code>{field.hint && <span>{field.hint}</span>}</div></div><div className="config-control">{field.kind === 'boolean' ? <Dropdown disabled={!enabled} selectedOptions={[value]} onOptionSelect={(_, data) => setValues({ ...values, [field.key]: data.optionValue ?? "false" })}><Option value="true">开启</Option><Option value="false">关闭</Option></Dropdown> : field.kind === 'json' ? <Textarea disabled={!enabled} value={value} onChange={(_, data) => setValues({ ...values, [field.key]: data.value })} /> : <Input disabled={!enabled} type={field.kind === 'number' ? 'number' : 'text'} step="any" value={value} onChange={(_, data) => setValues({ ...values, [field.key]: data.value })} />}<Checkbox className="inline-check" disabled={!enabled} checked={locked.has(field.key)} label="锁定客户端修改" onChange={(_, data) => { const next = new Set(locked); if (data.checked) next.add(field.key); else next.delete(field.key); setLocked(next) }} /></div></article> })}</div></section><ConfigPublishLibrary records={records} groups={groups} classGroups={classGroups} onPublish={publish} /></div>
+  const activeFields = CONFIG_FIELDS.filter((field) => field.section === section)
+  return <div className={styles.layout}>
+    <Card className={styles.sidebar}>
+      <div className={styles.sidebarHeader}>
+        <Text weight="semibold">配置资源</Text>
+        <Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>
+      </div>
+      <div className={styles.nav}>
+        {records.map((record) => <div className={styles.row} key={record.id}>
+          <Button
+            appearance="subtle"
+            className={mergeClasses(styles.navButton, styles.grow, editingId === record.id && styles.navButtonSelected)}
+            onClick={() => edit(record)}
+          >
+            <span className={styles.navButtonCopy}>
+              <Text weight="semibold" block>{record.name}</Text>
+              <Text className={styles.navButtonMeta} size={200} block>r{record.revision} · {record.group_ids.length ? `${record.group_ids.length} 个班级` : '草稿'}</Text>
+            </span>
+          </Button>
+          <Button appearance="subtle" title="克隆" icon={<Copy24Regular />} onClick={() => void clone(record)} />
+        </div>)}
+        {records.length === 0 && <div className={styles.empty}>暂无配置</div>}
+      </div>
+    </Card>
+    <div className={styles.main}>
+      <Card>
+        <CardHeader header={<Text as="h2" weight="semibold" size={400}>{editingId ? '编辑配置' : '新建配置'}</Text>} />
+        <div className={styles.commandBar}>
+          <Field className={styles.commandBarField} label="配置名称" hint="所有 RootConfig 键均已显性列出；启用后才下发"><Input value={name} onChange={(_, data) => setName(data.value)} /></Field>
+          <div className={styles.commandBarActions}>
+            <Button appearance="outline" icon={<ArrowUpload24Regular />} className={styles.fileButton}>导入 JSON<input type="file" accept="application/json,.json" onChange={(event) => { void importConfig(event.target.files?.[0]); event.target.value = '' }} /></Button>
+            <Button appearance="outline" icon={<Save24Regular />} onClick={() => void save(false)}>仅保存</Button>
+            <Button appearance="primary" disabled={!publishGroups.length} icon={<Send24Regular />} onClick={() => void save(true)}>保存并发布</Button>
+          </div>
+        </div>
+        <div className={styles.row}>
+          <div className={mergeClasses(styles.stack, styles.grow)}><Text weight="semibold" block>课表只读</Text><Text className={styles.muted} size={200} block>独立于配置键生效</Text></div>
+          <Switch checked={readonly} label="课表只读" onChange={(_, data) => setReadonly(data.checked)} />
+        </div>
+        <Field label="发布目标">
+          <ClassSelector groups={groups} classGroups={classGroups} selected={publishGroups} onChange={setPublishGroups} idPrefix="policy-target" />
+        </Field>
+      </Card>
+      <Card>
+        <CardHeader
+          header={<Text as="h2" weight="semibold" size={400}>配置项</Text>}
+        />
+        <div className={styles.commandBarActions} style={{ justifyContent: 'flex-start' }}>
+          {sections.map((item) => <Button key={item} appearance={section === item ? 'primary' : 'subtle'} onClick={() => setSection(item)}>{item} {CONFIG_FIELDS.filter((field) => field.section === item && managed.has(field.key)).length}/{CONFIG_FIELDS.filter((field) => field.section === item).length}</Button>)}
+        </div>
+        <div className={styles.main}>
+          {activeFields.map((field) => {
+            const enabled = managed.has(field.key)
+            const value = values[field.key] ?? displayValue(defaultValue(field.kind), field.kind)
+            return <div className={mergeClasses(styles.row, styles.fieldRow)} key={field.key}>
+              <div className={styles.row}>
+                <Checkbox
+                  checked={enabled}
+                  aria-label={`下发 ${field.label}`}
+                  onChange={(_, data) => { const next = new Set(managed); if (data.checked) { next.add(field.key); setValues({ ...values, [field.key]: value }) } else { next.delete(field.key); const locks = new Set(locked); locks.delete(field.key); setLocked(locks) } setManaged(next) }}
+                />
+                <div className={styles.stack}><Text weight="semibold" block>{field.label}</Text><Text className={styles.mono} size={200} block>{field.key}</Text>{field.hint && <Text className={styles.muted} size={200} block>{field.hint}</Text>}</div>
+              </div>
+              <div className={styles.grow}>
+                {field.kind === 'boolean'
+                  ? <Dropdown disabled={!enabled} aria-label={`${field.label} 取值`} selectedOptions={[value]} onOptionSelect={(_, data) => setValues({ ...values, [field.key]: data.optionValue ?? 'false' })}><Option value="true">开启</Option><Option value="false">关闭</Option></Dropdown>
+                  : field.kind === 'json'
+                    ? <Textarea textarea={{ style: { minHeight: '90px' } }} disabled={!enabled} aria-label={`${field.label} JSON 取值`} value={value} onChange={(_, data) => setValues({ ...values, [field.key]: data.value })} />
+                    : <Input disabled={!enabled} aria-label={`${field.label} 取值`} type={field.kind === 'number' ? 'number' : 'text'} step="any" value={value} onChange={(_, data) => setValues({ ...values, [field.key]: data.value })} />}
+              </div>
+              <Checkbox disabled={!enabled} checked={locked.has(field.key)} label="锁定客户端修改" onChange={(_, data) => { const next = new Set(locked); if (data.checked) next.add(field.key); else next.delete(field.key); setLocked(next) }} />
+            </div>
+          })}
+        </div>
+      </Card>
+      <ConfigPublishLibrary records={records} groups={groups} classGroups={classGroups} onPublish={publish} />
+    </div>
+  </div>
 }
 
-function ConfigPublishLibrary({ records, groups, classGroups, onPublish }: { records: PolicyRecord[]; groups: Group[]; classGroups: ClassGroup[]; onPublish: (record: PolicyRecord, ids: string[]) => void }) { const [selection, setSelection] = useState<Record<string, string[]>>({}); return <section className="publish-library data-section"><div className="section-heading"><h2>独立发布</h2><span>替换配置发布目标；清空可取消发布</span></div>{records.map((record) => { const ids = selection[record.id] ?? record.group_ids; return <article key={record.id}><div><Text weight="semibold">{record.name}</Text><Text size={200}>r{record.revision}</Text></div><ClassSelector groups={groups} classGroups={classGroups} selected={ids} onChange={(value) => setSelection({ ...selection, [record.id]: value })} idPrefix={`policy-publish-${record.id}`} /><Button appearance="primary" icon={<Send24Regular />} onClick={() => onPublish(record, ids)}>{ids.length ? '发布' : '取消发布'}</Button></article> })}</section> }
+function ConfigPublishLibrary({ records, groups, classGroups, onPublish }: { records: PolicyRecord[]; groups: Group[]; classGroups: ClassGroup[]; onPublish: (record: PolicyRecord, ids: string[]) => void }) {
+  const styles = useWorkspaceStyles()
+  const [selection, setSelection] = useState<Record<string, string[]>>({})
+  return <Card>
+    <CardHeader header={<Text as="h2" weight="semibold" size={400}>独立发布</Text>} description={<Text size={200}>替换配置发布目标；清空可取消发布</Text>} />
+    <div className={styles.main}>
+      {records.map((record) => {
+        const ids = selection[record.id] ?? record.group_ids
+        return <div className={styles.row} key={record.id}>
+          <div className={mergeClasses(styles.stack, styles.grow)}><Text weight="semibold" block>{record.name}</Text><Text className={styles.muted} size={200} block>r{record.revision}</Text></div>
+          <ClassSelector groups={groups} classGroups={classGroups} selected={ids} onChange={(value) => setSelection({ ...selection, [record.id]: value })} idPrefix={`policy-publish-${record.id}`} />
+          <Button appearance="primary" icon={<Send24Regular />} onClick={() => onPublish(record, ids)}>{ids.length ? '发布' : '取消发布'}</Button>
+        </div>
+      })}
+      {records.length === 0 && <div className={styles.empty}>暂无配置可发布</div>}
+    </div>
+  </Card>
+}
