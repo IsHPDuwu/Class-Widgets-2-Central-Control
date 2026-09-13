@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Add24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Checkbox, ColorPicker, Field, Input, Text, mergeClasses } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, ColorArea, ColorPicker, ColorSlider, Field, Input, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type CourseRecord } from './api'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
 
@@ -105,7 +105,12 @@ export function CourseWorkspace({ organizationId, onComplete }: Props) {
           <Field label="教师"><Input value={draft.teacher ?? ''} onChange={(_, data) => update({ teacher: data.value || undefined })} /></Field>
           <Field label="教室"><Input value={draft.location ?? ''} onChange={(_, data) => update({ location: data.value || undefined })} /></Field>
           <Field label="图标"><Input value={draft.icon ?? ''} onChange={(_, data) => update({ icon: data.value || undefined })} /></Field>
-          <Field label="颜色" hint="选择课程在课表中的显示颜色"><ColorPicker color={hexToHsv(draft.color ?? DEFAULT_COLOR)} onColorChange={(_, data) => update({ color: hsvToHex(data.color) })} /></Field>
+          <Field label="颜色" hint="选择课程在课表中的显示颜色">
+            <ColorPicker color={hexToHsv(draft.color ?? DEFAULT_COLOR)} onColorChange={(_, data) => update({ color: hsvToHex(data.color) })}>
+              <ColorArea />
+              <ColorSlider channel="hue" />
+            </ColorPicker>
+          </Field>
           <Checkbox checked={draft.isLocalClassroom} onChange={(_, data) => update({ isLocalClassroom: !!data.checked })} label="本班教室课程" />
         </div>
       </Card>
