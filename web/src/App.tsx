@@ -549,7 +549,7 @@ function DeviceTable({ devices, groups, title, onMove, onDelete }: { devices: De
       columnId: 'group',
       renderHeaderCell: () => '班级',
       renderCell: (device) => onMove
-        ? <Dropdown aria-label={`调整 ${device.name} 的班级`} selectedOptions={[device.group_id]} onOptionSelect={(_, data) => data.optionValue && onMove(device.id, data.optionValue)} style={{ minWidth: 140 }}>{groups.map((group) => <Option key={group.id} value={group.id}>{group.name}</Option>)}</Dropdown>
+        ? <Dropdown aria-label={`调整 ${device.name} 的班级`} placeholder="选择班级" selectedOptions={device.group_id ? [device.group_id] : []} value={groups.find((group) => group.id === device.group_id)?.name ?? ''} onOptionSelect={(_, data) => data.optionValue && onMove(device.id, data.optionValue)} style={{ minWidth: 0, width: '100%' }}>{groups.map((group) => <Option key={group.id} value={group.id}>{group.name}</Option>)}</Dropdown>
         : groups.find((group) => group.id === device.group_id)?.name ?? '未知',
     }),
     createTableColumn<Device>({

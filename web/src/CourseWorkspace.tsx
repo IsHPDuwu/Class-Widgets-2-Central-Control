@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Add24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Checkbox, Field, Input, Text, mergeClasses } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, ColorPicker, Field, Input, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type CourseRecord } from './api'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
 
@@ -8,6 +8,29 @@ type Props = { organizationId: string; onComplete: (message: string, tone?: 'suc
 type Course = Omit<CourseRecord, 'organization_id' | 'created_at' | 'updated_at'>
 
 const DEFAULT_COLOR = '#13b4d6'
+
+function hexToHsv(value: string) {
+  const hex = value.replace('#', '')
+  const number = Number.parseInt(hex.length === 3 ? hex.split('').map((item) => item + item).join('') : hex, 16)
+  const r = ((number >> 16) & 255) / 255
+  const g = ((number >> 8) & 255) / 255
+  const b = (number & 255) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  let h = 0
+  if (delta) h = max === r ? 60 * (((g - b) / delta) % 6) : max === g ? 60 * ((b - r) / delta + 2) : 60 * ((r - g) / delta + 4)
+  if (h < 0) h += 360
+  return { h, s: max ? delta / max : 0, v: max, a: 1 }
+}
+
+function hsvToHex({ h, s, v }: { h: number; s: number; v: number }) {
+  const c = v * s
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
+  const m = v - c
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return `#${[r, g, b].map((item) => Math.round((item + m) * 255).toString(16).padStart(2, '0')).join('')}`
+}
 
 export function CourseWorkspace({ organizationId, onComplete }: Props) {
   const styles = useWorkspaceStyles()
@@ -82,7 +105,7 @@ export function CourseWorkspace({ organizationId, onComplete }: Props) {
           <Field label="教师"><Input value={draft.teacher ?? ''} onChange={(_, data) => update({ teacher: data.value || undefined })} /></Field>
           <Field label="教室"><Input value={draft.location ?? ''} onChange={(_, data) => update({ location: data.value || undefined })} /></Field>
           <Field label="图标"><Input value={draft.icon ?? ''} onChange={(_, data) => update({ icon: data.value || undefined })} /></Field>
-          <Field label="颜色" hint="例如 #13b4d6"><Input value={draft.color ?? DEFAULT_COLOR} onChange={(_, data) => update({ color: data.value })} /></Field>
+          <Field label="颜色" hint="选择课程在课表中的显示颜色"><ColorPicker color={hexToHsv(draft.color ?? DEFAULT_COLOR)} onColorChange={(_, data) => update({ color: hsvToHex(data.color) })} /></Field>
           <Checkbox checked={draft.isLocalClassroom} onChange={(_, data) => update({ isLocalClassroom: !!data.checked })} label="本班教室课程" />
         </div>
       </Card>

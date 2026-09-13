@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Add24Regular, ArrowUpload24Regular, Copy24Regular, Save24Regular, Send24Regular } from '@fluentui/react-icons'
 import { api, type ClassGroup, type Group, type ScheduleRecord, type TimelineRecord } from './api'
 import { ClassSelector } from './ClassSelector'
-import { Button, Card, CardHeader, Checkbox, Field, Input, Select, Text, mergeClasses } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, Dropdown, Field, Input, Option, Text, mergeClasses } from '@fluentui/react-components'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
 
 type Course = { id: string; name: string; simplifiedName?: string; teacher?: string; color?: string; location?: string; isLocalClassroom: boolean }
@@ -193,10 +193,10 @@ function WeeklyEditor({ schedule, setSchedule, week, setWeek }: { schedule: Sche
             {days.map((day) => {
               const entry = day.entries[row]
               return entry
-                ? <Select key={day.id} aria-label={`${DAYS[day.dayOfWeek?.[0] ? day.dayOfWeek[0] - 1 : 0]} 第 ${row + 1} 节`} value={entry.subjectId ?? ''} onChange={(_, data) => setCell(day, entry, data.value)}>
-                  <option value="">未设置</option>
-                  {schedule.subjects.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
-                </Select>
+                ? <Dropdown key={day.id} aria-label={`${DAYS[day.dayOfWeek?.[0] ? day.dayOfWeek[0] - 1 : 0]} 第 ${row + 1} 节`} placeholder="未设置" selectedOptions={entry.subjectId ? [entry.subjectId] : []} value={schedule.subjects.find((course) => course.id === entry.subjectId)?.name ?? '未设置'} onOptionSelect={(_, data) => setCell(day, entry, data.optionValue ?? '')}>
+                  <Option value="">未设置</Option>
+                  {schedule.subjects.map((course) => <Option key={course.id} value={course.id}>{course.name}</Option>)}
+                </Dropdown>
                 : <div className={styles.emptyCell} key={day.id}><Text className={styles.muted} size={200}>无时间段</Text></div>
             })}
           </div>)}

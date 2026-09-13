@@ -65,8 +65,14 @@ export const useWorkspaceStyles = makeStyles({
   navButtonCopy: {
     display: 'grid',
     rowGap: '3px',
-    width: '100%',
+    flexGrow: 1,
+    width: 'auto',
     minWidth: '0',
+  },
+
+  navBadge: {
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
 
   navButtonMeta: {
@@ -85,6 +91,7 @@ export const useWorkspaceStyles = makeStyles({
     display: 'flex',
     flexWrap: 'wrap',
     alignItems: 'flex-end',
+    minWidth: '0',
     columnGap: tokens.spacingHorizontalM,
     rowGap: tokens.spacingVerticalS,
   },
@@ -98,6 +105,7 @@ export const useWorkspaceStyles = makeStyles({
   commandBarActions: {
     display: 'flex',
     flexWrap: 'wrap',
+    minWidth: '0',
     justifyContent: 'flex-end',
     columnGap: tokens.spacingHorizontalS,
     rowGap: tokens.spacingVerticalS,
@@ -145,6 +153,7 @@ export const useWorkspaceStyles = makeStyles({
     display: 'flex',
     flexWrap: 'wrap',
     alignItems: 'center',
+    minWidth: '0',
     columnGap: tokens.spacingHorizontalM,
     rowGap: tokens.spacingVerticalS,
   },

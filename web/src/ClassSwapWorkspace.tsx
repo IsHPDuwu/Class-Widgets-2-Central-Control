@@ -7,7 +7,7 @@ import {
   Checkmark24Regular,
   Dismiss24Regular,
 } from '@fluentui/react-icons'
-import { Badge, Button, Card, Field, Select, Spinner, Text, mergeClasses, tokens } from '@fluentui/react-components'
+import { Badge, Button, Card, Dropdown, Field, Option, Spinner, Text, mergeClasses, tokens } from '@fluentui/react-components'
 import { api, type ClassSwapPreparation, type ClassSwapSession, type Device, type Group } from './api'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
 
@@ -215,8 +215,8 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
         {preparation && <Badge appearance="tint" color={preparation.ready ? 'success' : 'informative'}>{preparation.ready ? '课表已同步' : '等待设备上传'}</Badge>}
       </div>
       <div className={styles.row}>
-        <Field label="班级筛选"><Select value={groupFilter} onChange={(_, data) => { setGroupFilter(data.value); resetPreparation() }}><option value="">全部班级</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
-        <Field label="目标设备"><Select value={deviceId} onChange={(_, data) => { setDeviceId(data.value); resetPreparation() }}>{availableDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}</Select></Field>
+        <Field label="班级筛选"><Dropdown placeholder="全部班级" selectedOptions={groupFilter ? [groupFilter] : []} value={groups.find((group) => group.id === groupFilter)?.name ?? '全部班级'} onOptionSelect={(_, data) => { setGroupFilter(data.optionValue ?? ''); resetPreparation() }}><Option value="">全部班级</Option>{groups.map((group) => <Option key={group.id} value={group.id}>{group.name}</Option>)}</Dropdown></Field>
+        <Field label="目标设备"><Dropdown selectedOptions={deviceId ? [deviceId] : []} value={selectedDevice?.name ?? ''} placeholder="选择设备" onOptionSelect={(_, data) => { setDeviceId(data.optionValue ?? ''); resetPreparation() }}>{availableDevices.map((device) => <Option key={device.id} value={device.id}>{device.name}</Option>)}</Dropdown></Field>
         <div className={styles.commandBarActions}><Button appearance="primary" icon={<CalendarSync24Regular />} disabled={!deviceId || loading} onClick={() => void prepare()}>获取设备课表</Button><Button appearance="secondary" icon={<ArrowSync24Regular />} disabled={!requestId || loading} onClick={() => void refreshPreparation()}>刷新</Button></div>
       </div>
       {loading && <Spinner size="tiny" label="正在与设备同步" />}
@@ -225,8 +225,8 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
     {schedule && <Card>
       <div className={styles.cardHeading}>
         <div className={styles.row}>
-          <Field label="来源星期"><Select value={String(day)} onChange={(_, data) => { setDay(Number(data.value)); resetSelection() }}>{DAYS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Select></Field>
-          <Field label="周期周"><Select value={String(week)} onChange={(_, data) => { setWeek(Number(data.value)); resetSelection() }}>{Array.from({ length: schedule.meta.maxWeekCycle }, (_, index) => <option key={index + 1} value={index + 1}>{schedule.meta.maxWeekCycle === 2 ? (index === 0 ? '单周' : '双周') : `第 ${index + 1} 周`}</option>)}</Select></Field>
+          <Field label="来源星期"><Dropdown selectedOptions={[String(day)]} value={DAYS[day - 1]} onOptionSelect={(_, data) => { setDay(Number(data.optionValue)); resetSelection() }}>{DAYS.map((name, index) => <Option key={name} value={String(index + 1)}>{name}</Option>)}</Dropdown></Field>
+          <Field label="周期周"><Dropdown selectedOptions={[String(week)]} value={schedule.meta.maxWeekCycle === 2 ? (week === 1 ? '单周' : '双周') : `第 ${week} 周`} onOptionSelect={(_, data) => { setWeek(Number(data.optionValue)); resetSelection() }}>{Array.from({ length: schedule.meta.maxWeekCycle }, (_, index) => <Option key={index + 1} value={String(index + 1)}>{schedule.meta.maxWeekCycle === 2 ? (index === 0 ? '单周' : '双周') : `第 ${index + 1} 周`}</Option>)}</Dropdown></Field>
         </div>
         <Button appearance="secondary" icon={<CalendarSync24Regular />} onClick={() => void applyWholeDay()}>整天应用到今天</Button>
       </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Add24Regular, Copy24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Checkbox, Field, Input, Select, Text, mergeClasses } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, Dropdown, Field, Input, Option, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type TimelineRecord } from './api'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
 
@@ -113,10 +113,9 @@ export function TimelineWorkspace({ organizationId, onComplete }: Props) {
         </div>
         <div className={styles.row}>
           <Field label="规则类型">
-            <Select value={timeline.date ? 'date' : 'week'} onChange={(_, data) => update(data.value === 'date' ? { date: new Date().toISOString().slice(0, 10), dayOfWeek: undefined, weeks: 'all' } : { date: undefined, dayOfWeek: [1, 2, 3, 4, 5], weeks: 'all' })}>
-              <option value="week">按星期</option>
-              <option value="date">按日期</option>
-            </Select>
+            <Dropdown selectedOptions={[timeline.date ? 'date' : 'week']} value={timeline.date ? '按日期' : '按星期'} onOptionSelect={(_, data) => update(data.optionValue === 'date' ? { date: new Date().toISOString().slice(0, 10), dayOfWeek: undefined, weeks: 'all' } : { date: undefined, dayOfWeek: [1, 2, 3, 4, 5], weeks: 'all' })}>
+              <Option value="week">按星期</Option><Option value="date">按日期</Option>
+            </Dropdown>
           </Field>
           {timeline.date
             ? <Field label="指定日期"><Input type="date" value={timeline.date} onChange={(_, data) => update({ date: data.value })} /></Field>
@@ -132,9 +131,9 @@ export function TimelineWorkspace({ organizationId, onComplete }: Props) {
         <div className={styles.main}>
           {timeline.entries.map((entry, index) => <div className={styles.row} key={entry.id}>
             <Text weight="semibold">{index + 1}</Text>
-            <Select aria-label={`第 ${index + 1} 个时间段的类型`} value={entry.type} onChange={(_, data) => updateEntry(entry.id, { type: data.value as TimelineEntry['type'] })}>
-              {ENTRY_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
+            <Dropdown aria-label={`第 ${index + 1} 个时间段的类型`} selectedOptions={[entry.type]} value={ENTRY_TYPES.find((option) => option.value === entry.type)?.label} onOptionSelect={(_, data) => updateEntry(entry.id, { type: data.optionValue as TimelineEntry['type'] })}>
+              {ENTRY_TYPES.map((option) => <Option key={option.value} value={option.value}>{option.label}</Option>)}
+            </Dropdown>
             <Input aria-label={`第 ${index + 1} 个时间段的开始时间`} type="time" value={entry.startTime} onChange={(_, data) => updateEntry(entry.id, { startTime: data.value })} />
             <Text className={styles.muted}>至</Text>
             <Input aria-label={`第 ${index + 1} 个时间段的结束时间`} type="time" value={entry.endTime} onChange={(_, data) => updateEntry(entry.id, { endTime: data.value })} />

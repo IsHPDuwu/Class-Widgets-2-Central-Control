@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Save24Regular, Send24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Field, Select, Text } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Dropdown, Field, Option, Text } from '@fluentui/react-components'
 import { api, type ClassGroup, type Group, type ScheduleRecord, type TimelineRecord } from './api'
 import { ClassSelector } from './ClassSelector'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
@@ -165,7 +165,7 @@ export function CrossGroupScheduleWorkspace({ organizationId, groups, classGroup
       <Button appearance="primary" icon={<Send24Regular />} onClick={() => void save(true)}>保存并发布</Button>
     </div>
     <div className={styles.row}>
-      <Field label="公共时间线"><Select value={timelineId} onChange={(_, data) => { setTimelineId(data.value); setSelectedGroups([]); setDrafts({}); setWeek(1) }}><option value="">选择时间线</option>{timelines.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</Select></Field>
+      <Field label="公共时间线"><Dropdown placeholder="选择时间线" selectedOptions={timelineId ? [timelineId] : []} value={timelines.find((item) => item.id === timelineId)?.name ?? ''} onOptionSelect={(_, data) => { setTimelineId(data.optionValue ?? ''); setSelectedGroups([]); setDrafts({}); setWeek(1) }}>{timelines.map((item) => <Option key={item.id} value={item.id}>{item.name}</Option>)}</Dropdown></Field>
       <Field className={styles.grow} label="参与班级"><ClassSelector groups={groups} classGroups={classGroups} selected={selectedGroups} onChange={selectGroups} idPrefix="cross-group" /></Field>
     </div>
     <div className={styles.marker}>{DAYS.map((label, index) => <Button appearance={day === index + 1 ? 'primary' : 'secondary'} key={label} onClick={() => setDay(index + 1)}>{label}</Button>)}</div>
@@ -184,10 +184,10 @@ export function CrossGroupScheduleWorkspace({ organizationId, groups, classGroup
                 const current = drafts[groupId] ? activeDay(drafts[groupId], day, week) : undefined
                 const currentEntry = current?.entries[index] ?? current?.entries.find((item) => (item.sourceEntryId ?? item.id) === entry.id)
                 const value = currentEntry?.subjectId ?? (current && currentEntry ? assignmentFor(drafts[groupId], current, currentEntry, week)?.subjectId ?? '' : '')
-                return <Select key={groupId} aria-label={`${groups.find((item) => item.id === groupId)?.name ?? '班级'} 第 ${index + 1} 节`} value={value} disabled={!current} onChange={(_, data) => setCell(groupId, entry.id, index, data.value)}>
-                  <option value="">未设置</option>
-                  {courses.map((course) => <option key={course.id} value={course.id}>{course.name}</option>)}
-                </Select>
+                return <Dropdown key={groupId} aria-label={`${groups.find((item) => item.id === groupId)?.name ?? '班级'} 第 ${index + 1} 节`} placeholder="未设置" selectedOptions={value ? [value] : []} value={courses.find((course) => course.id === value)?.name ?? '未设置'} disabled={!current} onOptionSelect={(_, data) => setCell(groupId, entry.id, index, data.optionValue ?? '')}>
+                  <Option value="">未设置</Option>
+                  {courses.map((course) => <Option key={course.id} value={course.id}>{course.name}</Option>)}
+                </Dropdown>
               })}
             </div>)}
           </div>}
