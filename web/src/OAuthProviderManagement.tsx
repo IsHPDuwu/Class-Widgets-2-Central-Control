@@ -35,7 +35,7 @@ export function OAuthProviderManagement({ onComplete }: Props) {
         {providers.length === 0 && <div className={styles.empty}>尚未配置 OIDC Provider</div>}
         {providers.map((provider) => <Button appearance="subtle" key={provider.id} className={mergeClasses(styles.navButton, selectedId === provider.id && styles.navButtonSelected)} onClick={() => select(provider)}>
           <span className={styles.navButtonCopy}><Text weight="semibold" block>{provider.name}</Text><Text className={styles.navButtonMeta} size={200} block>{provider.issuer_url}</Text></span>
-          <Badge appearance="tint" color={provider.enabled ? 'success' : 'informative'}>{provider.enabled ? '启用' : '停用'}</Badge>
+          <Badge className={styles.navBadge} appearance="tint" color={provider.enabled ? 'success' : 'informative'}>{provider.enabled ? '启用' : '停用'}</Badge>
         </Button>)}
       </div>
     </Card>
