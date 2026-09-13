@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Add24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Checkbox, ColorArea, ColorPicker, ColorSlider, Field, Input, Text, mergeClasses } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, ColorArea, ColorPicker, ColorSlider, Field, Input, Popover, PopoverSurface, PopoverTrigger, Text, mergeClasses } from '@fluentui/react-components'
 import { api, type CourseRecord } from './api'
 import { useWorkspaceStyles } from './styles/workspaceStyles'
 
@@ -32,11 +32,21 @@ function hsvToHex({ h, s, v }: { h: number; s: number; v: number }) {
   return `#${[r, g, b].map((item) => Math.round((item + m) * 255).toString(16).padStart(2, '0')).join('')}`
 }
 
+const HEX_PATTERN = /^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
+
+function normalizeHex(value: string) {
+  const hex = value.trim().replace(/^#?/, '#')
+  if (!HEX_PATTERN.test(hex)) return undefined
+  const body = hex.slice(1)
+  return body.length === 3 ? `#${body.split('').map((item) => item + item).join('')}` : hex
+}
+
 export function CourseWorkspace({ organizationId, onComplete }: Props) {
   const styles = useWorkspaceStyles()
   const [courses, setCourses] = useState<CourseRecord[]>([])
   const [selectedId, setSelectedId] = useState('')
   const [draft, setDraft] = useState<Course>({ id: crypto.randomUUID(), name: '新课程', isLocalClassroom: true })
+  const [hexInput, setHexInput] = useState(DEFAULT_COLOR)
 
   async function load() {
     if (!organizationId) return
@@ -51,9 +61,11 @@ export function CourseWorkspace({ organizationId, onComplete }: Props) {
   function open(course: CourseRecord) {
     setSelectedId(course.id)
     setDraft({ id: course.id, name: course.name, simplifiedName: course.simplifiedName, teacher: course.teacher, icon: course.icon, color: course.color, location: course.location, isLocalClassroom: course.isLocalClassroom })
+    setHexInput(course.color ?? DEFAULT_COLOR)
   }
-  function reset() { setSelectedId(''); setDraft({ id: crypto.randomUUID(), name: '新课程', isLocalClassroom: true }) }
+  function reset() { setSelectedId(''); setDraft({ id: crypto.randomUUID(), name: '新课程', isLocalClassroom: true }); setHexInput(DEFAULT_COLOR) }
   function update(patch: Partial<Course>) { setDraft((value) => ({ ...value, ...patch })) }
+  function applyColor(color: string) { setDraft((value) => ({ ...value, color })); setHexInput(color) }
   async function save() {
     try {
       const result = selectedId ? await api.updateCourse(selectedId, { course: draft }) : await api.createCourse({ organization_id: organizationId, course: draft })
@@ -106,10 +118,34 @@ export function CourseWorkspace({ organizationId, onComplete }: Props) {
           <Field label="教室"><Input value={draft.location ?? ''} onChange={(_, data) => update({ location: data.value || undefined })} /></Field>
           <Field label="图标"><Input value={draft.icon ?? ''} onChange={(_, data) => update({ icon: data.value || undefined })} /></Field>
           <Field label="颜色" hint="选择课程在课表中的显示颜色">
-            <ColorPicker color={hexToHsv(draft.color ?? DEFAULT_COLOR)} onColorChange={(_, data) => update({ color: hsvToHex(data.color) })}>
-              <ColorArea />
-              <ColorSlider channel="hue" />
-            </ColorPicker>
+            <Popover trapFocus>
+              <PopoverTrigger disableButtonEnhancement>
+                <div className={styles.colorTrigger} role="button" tabIndex={0} aria-label="选择课程颜色">
+                  <span className={styles.colorSwatch} style={{ backgroundColor: draft.color ?? DEFAULT_COLOR }} aria-hidden="true" />
+                  <Text size={300}>{hexInput}</Text>
+                </div>
+              </PopoverTrigger>
+              <PopoverSurface>
+                <div className={styles.colorPanel}>
+                  <ColorPicker color={hexToHsv(draft.color ?? DEFAULT_COLOR)} onColorChange={(_, data) => applyColor(hsvToHex(data.color))}>
+                    <ColorArea inputX={{ 'aria-label': '饱和度' }} inputY={{ 'aria-label': '亮度' }} />
+                    <ColorSlider aria-label="色相" />
+                  </ColorPicker>
+                  <Field label="HEX" validationState={normalizeHex(hexInput) ? undefined : 'error'} validationMessage={normalizeHex(hexInput) ? undefined : '请输入 #RGB 或 #RRGGBB 格式的颜色。'}>
+                    <Input
+                      value={hexInput}
+                      maxLength={7}
+                      placeholder="#13b4d6"
+                      onChange={(_, data) => {
+                        setHexInput(data.value)
+                        const normalized = normalizeHex(data.value)
+                        if (normalized) setDraft((value) => ({ ...value, color: normalized }))
+                      }}
+                    />
+                  </Field>
+                </div>
+              </PopoverSurface>
+            </Popover>
           </Field>
           <Checkbox checked={draft.isLocalClassroom} onChange={(_, data) => update({ isLocalClassroom: !!data.checked })} label="本班教室课程" />
         </div>

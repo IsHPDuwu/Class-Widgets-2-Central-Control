@@ -179,6 +179,81 @@ export const useWorkspaceStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
 
+  /** 颜色选择器：色域 + 滑块 + 预览 */
+  colorPicker: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: tokens.spacingHorizontalS,
+    width: 'fit-content',
+    maxWidth: '100%',
+  },
+
+  colorTrigger: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: tokens.spacingHorizontalS,
+    paddingTop: tokens.spacingVerticalXS,
+    paddingBottom: tokens.spacingVerticalXS,
+    paddingLeft: tokens.spacingHorizontalS,
+    paddingRight: tokens.spacingHorizontalS,
+    borderRadius: tokens.borderRadiusMedium,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
+    backgroundColor: tokens.colorNeutralBackground1,
+    cursor: 'pointer',
+    '&:hover': {
+      borderTopColor: tokens.colorNeutralStroke1Hover,
+      borderRightColor: tokens.colorNeutralStroke1Hover,
+      borderBottomColor: tokens.colorNeutralStroke1Hover,
+      borderLeftColor: tokens.colorNeutralStroke1Hover,
+    },
+  },
+
+  colorPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: tokens.spacingVerticalS,
+    width: '240px',
+    maxWidth: '100%',
+    '& .fui-ColorArea': {
+      width: '100%',
+      minWidth: '0',
+      minHeight: '0',
+      height: '180px',
+    },
+    '& .fui-ColorSlider': {
+      width: '100%',
+      minWidth: '0',
+    },
+  },
+
+  colorPanelRow: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: tokens.spacingHorizontalS,
+  },
+
+  colorSwatch: {
+    width: '20px',
+    height: '20px',
+    flexShrink: 0,
+    borderRadius: tokens.borderRadiusSmall,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
+    '@media (forced-colors: active)': {
+      forcedColorAdjust: 'none',
+    },
+  },
+
+  colorPreview: {
+    width: '56px',
+    height: '56px',
+    flexShrink: 0,
+    borderRadius: tokens.borderRadiusMedium,
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke1),
+    '@media (forced-colors: active)': {
+      forcedColorAdjust: 'none',
+    },
+  },
+
   /** 隐藏原生 file input，保留按钮样式（Fluent 官方推荐做法） */
   fileButton: {
     position: 'relative',
