@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Add24Regular, Copy24Regular, Delete24Regular, Save24Regular } from '@fluentui/react-icons'
-import { Button, Card, CardHeader, Checkbox, Field, Input, Select } from '@fluentui/react-components'
+import { Button, Card, CardHeader, Checkbox, Field, Input, Select, Text } from '@fluentui/react-components'
 import { api, type TimelineRecord } from './api'
 
 type TimelineEntry = {
@@ -68,11 +68,11 @@ export function TimelineWorkspace({ organizationId, onComplete }: Props) {
     try { await api.deleteTimeline(selectedId); onComplete('时间线已删除'); reset(); await load() } catch (error) { onComplete(error instanceof Error ? error.message : '删除时间线失败', 'error') }
   }
   return <div className="timeline-resource-workspace">
-    <Card className="resource-sidebar"><CardHeader header={<strong>时间线</strong>} action={<Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>} /><div className="resource-nav">{records.map((record) => <Button className={selectedId === record.id ? 'selected' : ''} appearance="subtle" key={record.id} onClick={() => open(record)}><span><strong>{record.name}</strong><small>{(record.timeline.entries as TimelineEntry[] ?? []).length} 个时间段</small></span></Button>)}</div></Card>
+    <Card className="resource-sidebar"><CardHeader header={<Text weight="semibold">时间线</Text>} action={<Button appearance="subtle" icon={<Add24Regular />} onClick={reset}>新建</Button>} /><div className="resource-nav">{records.map((record) => <Button className={selectedId === record.id ? 'selected' : ''} appearance="subtle" key={record.id} onClick={() => open(record)}><span><Text weight="semibold">{record.name}</Text><Text size={200}>{(record.timeline.entries as TimelineEntry[] ?? []).length} 个时间段</Text></span></Button>)}</div></Card>
     <Card className="form-section timeline-resource-editor"><div className="editor-commandbar"><Field label="时间线名称"><Input value={name} onChange={(_, data) => setName(data.value)} /></Field><div className="form-actions"><Button appearance="secondary" icon={<Copy24Regular />} onClick={clone}>复制</Button><Button appearance="secondary" icon={<Delete24Regular />} disabled={!selectedId} onClick={() => void remove()}>删除</Button><Button appearance="primary" icon={<Save24Regular />} onClick={() => void save()}>保存</Button></div></div>
       <div className="timeline-rule">
         <Field label="规则类型">
-          <Select value={timeline.date ? 'date' : 'week'} onChange={(event) => update(event.target.value === 'date' ? { date: new Date().toISOString().slice(0, 10), dayOfWeek: undefined, weeks: 'all' } : { date: undefined, dayOfWeek: [1, 2, 3, 4, 5], weeks: 'all' })}>
+          <Select value={timeline.date ? 'date' : 'week'} onChange={(_, data) => update(data.value === 'date' ? { date: new Date().toISOString().slice(0, 10), dayOfWeek: undefined, weeks: 'all' } : { date: undefined, dayOfWeek: [1, 2, 3, 4, 5], weeks: 'all' })}>
             <option value="week">按星期</option><option value="date">按日期</option>
           </Select>
         </Field>
@@ -81,7 +81,7 @@ export function TimelineWorkspace({ organizationId, onComplete }: Props) {
           <Field label="循环周" hint="可以指定任意周数；留空表示每周"><Input type="number" min={1} max={52} placeholder="每周" value={timeline.weeks === 'all' || timeline.weeks == null ? '' : String(timeline.weeks)} onChange={(_, data) => update({ weeks: data.value.trim() ? Number(data.value) : 'all' })} /></Field>
         </>}
       </div>
-      <div className="pane-heading"><strong>时间段</strong><Button appearance="secondary" icon={<Add24Regular />} onClick={addEntry}>添加时间段</Button></div><div className="timeline-entry-list">{timeline.entries.map((entry, index) => <Card className="timeline-entry-row" key={entry.id}><strong>{index + 1}</strong><Select value={entry.type} onChange={(event) => updateEntry(entry.id, { type: event.target.value as TimelineEntry['type'] })}><option value="class">课程</option><option value="break">课间</option><option value="activity">活动</option><option value="free">空闲</option><option value="preparation">预备</option></Select><Input type="time" value={entry.startTime} onChange={(_, data) => updateEntry(entry.id, { startTime: data.value })} /><span>至</span><Input type="time" value={entry.endTime} onChange={(_, data) => updateEntry(entry.id, { endTime: data.value })} /><Input placeholder="时间段标题" value={entry.title ?? ''} onChange={(_, data) => updateEntry(entry.id, { title: data.value || undefined })} /><Button appearance="subtle" icon={<Delete24Regular />} onClick={() => removeEntry(entry.id)} aria-label={`删除时间段 ${index + 1}`} /></Card>)}{timeline.entries.length === 0 && <div className="empty-command">暂无时间段，请添加时间段。</div>}</div>
+      <div className="pane-heading"><Text weight="semibold">时间段</Text><Button appearance="secondary" icon={<Add24Regular />} onClick={addEntry}>添加时间段</Button></div><div className="timeline-entry-list">{timeline.entries.map((entry, index) => <Card className="timeline-entry-row" key={entry.id}><Text weight="semibold">{index + 1}</Text><Select value={entry.type} onChange={(_, data) => updateEntry(entry.id, { type: data.value as TimelineEntry['type'] })}><option value="class">课程</option><option value="break">课间</option><option value="activity">活动</option><option value="free">空闲</option><option value="preparation">预备</option></Select><Input type="time" value={entry.startTime} onChange={(_, data) => updateEntry(entry.id, { startTime: data.value })} /><span>至</span><Input type="time" value={entry.endTime} onChange={(_, data) => updateEntry(entry.id, { endTime: data.value })} /><Input placeholder="时间段标题" value={entry.title ?? ''} onChange={(_, data) => updateEntry(entry.id, { title: data.value || undefined })} /><Button appearance="subtle" icon={<Delete24Regular />} onClick={() => removeEntry(entry.id)} aria-label={`删除时间段 ${index + 1}`} /></Card>)}{timeline.entries.length === 0 && <div className="empty-command">暂无时间段，请添加时间段。</div>}</div>
     </Card>
   </div>
 }

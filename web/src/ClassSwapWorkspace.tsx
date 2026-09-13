@@ -215,7 +215,7 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
       <div className="class-swap-device-fields">
         <Field label="班级筛选"><Select value={groupFilter} onChange={(_, data) => { setGroupFilter(data.value); resetPreparation() }}><option value="">全部班级</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></Field>
         <Field label="目标设备"><Select value={deviceId} onChange={(_, data) => { setDeviceId(data.value); resetPreparation() }}>{availableDevices.map((device) => <option key={device.id} value={device.id}>{device.name}</option>)}</Select></Field>
-        <div className="class-swap-device-actions"><Button appearance="primary" icon={<CalendarSync24Regular />} disabled={!deviceId || loading} onClick={() => void prepare()}>获取设备课表</Button><Button icon={<ArrowSync24Regular />} disabled={!requestId || loading} onClick={() => void refreshPreparation()}>刷新</Button></div>
+        <div className="class-swap-device-actions"><Button appearance="primary" icon={<CalendarSync24Regular />} disabled={!deviceId || loading} onClick={() => void prepare()}>获取设备课表</Button><Button appearance="secondary" icon={<ArrowSync24Regular />} disabled={!requestId || loading} onClick={() => void refreshPreparation()}>刷新</Button></div>
       </div>
       {loading && <Spinner size="tiny" label="正在与设备同步" />}
     </Card>
@@ -226,7 +226,7 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
           <Field label="来源星期"><Select value={String(day)} onChange={(_, data) => { setDay(Number(data.value)); resetSelection() }}>{DAYS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Select></Field>
           <Field label="周期周"><Select value={String(week)} onChange={(_, data) => { setWeek(Number(data.value)); resetSelection() }}>{Array.from({ length: schedule.meta.maxWeekCycle }, (_, index) => <option key={index + 1} value={index + 1}>{schedule.meta.maxWeekCycle === 2 ? (index === 0 ? '单周' : '双周') : `第 ${index + 1} 周`}</option>)}</Select></Field>
         </div>
-        <Button icon={<CalendarSync24Regular />} onClick={() => void applyWholeDay()}>整天应用到今天</Button>
+        <Button appearance="secondary" icon={<CalendarSync24Regular />} onClick={() => void applyWholeDay()}>整天应用到今天</Button>
       </div>
 
       <div className="class-swap-picker">
@@ -237,8 +237,8 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
               const selected = entry.id === sourceId || entry.id === targetEntryId
               const subject = subjectById(entry.subjectId)
               return <Button appearance="subtle" className={`class-swap-entry${selected ? ' selected' : ''}`} key={entry.id} onClick={() => selectEntry(entry)}>
-                <i style={{ background: subject?.color || 'var(--accent)' }} />
-                <span><strong>{entryName(entry)}</strong><small>{entry.startTime} – {entry.endTime}</small></span>
+                <span className="subject-swatch" role="img" aria-label={`${subject?.name ?? '课程'} 标识色`} style={{ background: subject?.color || 'var(--accent)' }} />
+                <span><Text weight="semibold">{entryName(entry)}</Text><Text size={200}>{entry.startTime} – {entry.endTime}</Text></span>
                 {entry.id === sourceId && <Badge appearance="filled" color="brand">源课程</Badge>}
                 {entry.id === targetEntryId && <Badge appearance="tint" color="brand">互换目标</Badge>}
               </Button>
@@ -251,7 +251,7 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
           <div className="class-swap-pane-title"><div><Text weight="semibold">全部科目</Text><Text size={200}>替换为指定科目</Text></div></div>
           <div className="class-swap-subject-list">
             {schedule.subjects.map((subject) => <Button appearance="subtle" className={`class-swap-subject${targetSubjectId === subject.id ? ' selected' : ''}`} disabled={!sourceId} key={subject.id} onClick={() => selectSubject(subject)}>
-              <i style={{ background: subject.color || 'var(--accent)' }} />
+              <span className="subject-swatch" role="img" aria-label={`${subject.name} 标识色`} style={{ background: subject.color || 'var(--accent)' }} />
               <span>{subject.name}</span>
               {targetSubjectId === subject.id && <Checkmark24Regular />}
             </Button>)}
@@ -262,13 +262,13 @@ export function ClassSwapWorkspace({ organizationId, groups, devices, onComplete
       <footer className="class-swap-footer">
         <div className="class-swap-last">{lastSwapText && <><Checkmark24Regular /><span>上次操作：{lastSwapText}</span></>}</div>
         <div className={`class-swap-guide${ready ? ' ready' : ''}`}>{targetEntry ? <ArrowSwap24Regular /> : ready ? <ArrowRight24Regular /> : null}<span>{guide}</span></div>
-        <div className="class-swap-footer-actions"><Button onClick={resetSelection}>{source ? '取消选择' : '取消'}</Button>{ready && <Button appearance="primary" icon={<Checkmark24Regular />} onClick={() => void commitSwap()}>确认换课</Button>}</div>
+        <div className="class-swap-footer-actions"><Button appearance="secondary" onClick={resetSelection}>{source ? '取消选择' : '取消'}</Button>{ready && <Button appearance="primary" icon={<Checkmark24Regular />} onClick={() => void commitSwap()}>确认换课</Button>}</div>
       </footer>
     </Card>}
 
     {active.length > 0 && <Card className="class-swap-active-card">
       <div><Text weight="semibold">该设备今天的临时换课</Text><Text size={200}>已下发 {operationCount} 个操作，可继续换课或统一恢复。</Text></div>
-      <Button icon={<Dismiss24Regular />} onClick={() => void restore(active[0].id)}>立即恢复该设备</Button>
+      <Button appearance="secondary" icon={<Dismiss24Regular />} onClick={() => void restore(active[0].id)}>立即恢复该设备</Button>
     </Card>}
   </div>
 }

@@ -16,11 +16,13 @@ import {
   Navigation24Regular,
   Organization24Regular,
   PeopleTeam24Regular,
+  Search24Regular,
   ShieldLock24Regular,
+  Filter24Regular,
   WeatherMoon24Regular,
   SignOut24Regular,
 } from '@fluentui/react-icons'
-import { Button, Checkbox, Field, Input, Select, Tab, TabList } from '@fluentui/react-components'
+import { Badge, Button, Checkbox, DataGrid, DataGridBody, DataGridCell, DataGridHeader, DataGridHeaderCell, DataGridRow, Dropdown, Field, Input, Option, Select, Tab, TabList, TableCellLayout, Text, Textarea, createTableColumn } from '@fluentui/react-components'
 import { api, getAdminKey, getSessionToken, setAdminKey, setSessionToken, type AdminUser, type CommandRecord, type Device, type DiagnosticDetail, type Group, type OAuthProviderPublic, type Organization, type Principal } from './api'
 import { ScheduleWorkspace } from './ScheduleWorkspace'
 import { TimelineWorkspace } from './TimelineWorkspace'
@@ -208,15 +210,15 @@ function App({ themeMode, onThemeModeChange }: { themeMode: ThemeMode; onThemeMo
   if (oauthPending) return <OAuthCompletionPage onComplete={() => { setOauthPending(false); void refresh() }} />
   return <div className="app-shell">
     <aside className={mobileNav ? 'sidebar open' : 'sidebar'}>
-      <div className="brand"><div className="brand-mark"><img src={centralControlIcon} alt="集控" /></div><div><strong>集控</strong><span>Class Widgets</span></div></div>
+      <div className="brand"><div className="brand-mark"><img src={centralControlIcon} alt="集控" /></div><div><Text className="brand-title" weight="semibold">集控</Text><Text size={200}>Class Widgets</Text></div></div>
       <TabList className="nav-list" vertical selectedValue={view} onTabSelect={(_, data) => { setView(data.value as View); setMobileNav(false) }} aria-label="主导航">{navItems.map((item) => { const Icon = item.icon; return <Tab key={item.id} value={item.id} icon={<Icon />}>{item.label}</Tab> })}</TabList>
       <div className="sidebar-footer"><span className={connected ? 'status-dot online' : 'status-dot'} /><span>{connected ? '服务已连接' : '服务未连接'}</span></div>
     </aside>
     <main>
       <header className="topbar">
         <Button className="menu-button" appearance="subtle" icon={<Navigation24Regular />} aria-label="打开导航" onClick={() => setMobileNav(!mobileNav)} />
-        <label className="toolbar-select"><Organization24Regular /><Select aria-label="当前组织" value={organizationId} onChange={(_, data) => setOrganizationId(data.value)}>{organizations.length === 0 && <option value="">未选择组织</option>}{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</Select></label>
-        <label className="toolbar-select theme-picker"><WeatherMoon24Regular /><Select aria-label="颜色模式" value={themeMode} onChange={(_, data) => onThemeModeChange(data.value as ThemeMode)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select></label>
+        <div className="toolbar-select"><Organization24Regular /><Select aria-label="当前组织" value={organizationId} onChange={(_, data) => setOrganizationId(data.value)}>{organizations.length === 0 && <option value="">未选择组织</option>}{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</Select></div>
+        <div className="toolbar-select theme-picker"><WeatherMoon24Regular /><Select aria-label="颜色模式" value={themeMode} onChange={(_, data) => onThemeModeChange(data.value as ThemeMode)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></Select></div>
         <Button appearance="subtle" icon={<ArrowClockwise24Regular />} aria-label="刷新" disabled={loading} onClick={() => void refresh()} />
         <Button appearance="subtle" icon={<SignOut24Regular />} aria-label="退出登录" title="退出登录" onClick={() => void logout()} />
       </header>
@@ -259,7 +261,7 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
       <div className="login-banner">
         <div className="login-banner-copy">
           <img src={centralControlIcon} alt="Class Widgets" />
-          <strong>Class Widgets</strong>
+          <Text weight="semibold">Class Widgets</Text>
           <span>集中管理平台</span>
           <p>统一管理设备、课表、策略与自动化任务。</p>
         </div>
@@ -271,14 +273,14 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
         </div>
         {!registering && (
           <div className="segmented login-segment">
-            <button type="button" className={mode === 'tenant' ? 'selected' : ''} onClick={() => setMode('tenant')}>租户登录</button>
-            <button type="button" className={mode === 'admin' ? 'selected' : ''} onClick={() => setMode('admin')}>管理员登录</button>
+            <Button type="button" className={mode === 'tenant' ? 'selected' : ''} onClick={() => setMode('tenant')}>租户登录</Button>
+            <Button type="button" className={mode === 'admin' ? 'selected' : ''} onClick={() => setMode('admin')}>管理员登录</Button>
           </div>
         )}
         {registering ? (
           <form onSubmit={register}>
             <Field label="租户名称" required hint="1–120 个字符，例如：示范中学">
-              <Input value={organizationName} maxLength={120} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" />
+              <Input value={organizationName} maxLength={120} onChange={(_, data) => setOrganizationName(data.value)} placeholder="例如：示范中学" />
             </Field>
             <Field
               label="管理员用户名"
@@ -287,7 +289,7 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
               validationState={username.length > 0 && !usernameValid ? 'error' : undefined}
               validationMessage={username.length > 0 && !usernameValid ? '只能包含字母、数字、下划线、点或连字符。' : undefined}
             >
-              <Input value={username} maxLength={80} onChange={(event) => onUsernameChange(event.target.value)} placeholder="例如：admin" />
+              <Input value={username} maxLength={80} onChange={(_, data) => onUsernameChange(data.value)} placeholder="例如：admin" />
             </Field>
             <Field
               label="密码"
@@ -296,7 +298,7 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
               validationState={passwordTooShort || passwordTooLong ? 'error' : password.length >= 12 ? 'success' : undefined}
               validationMessage={passwordTooShort ? `密码至少需要 12 个字符，当前 ${password.length} 个。` : passwordTooLong ? '密码不能超过 200 个字符。' : password.length >= 12 ? '密码长度符合要求。' : undefined}
             >
-              <Input type="password" value={password} maxLength={200} onChange={(event) => onPasswordChange(event.target.value)} placeholder="至少 12 个字符" />
+              <Input type="password" value={password} maxLength={200} onChange={(_, data) => onPasswordChange(data.value)} placeholder="至少 12 个字符" />
             </Field>
             <Button appearance="primary" type="submit" disabled={!organizationName.trim() || !username.trim() || !usernameValid || password.length < 12 || passwordTooLong || loading}>注册</Button>
             <Button appearance="subtle" type="button" onClick={() => setRegistering(false)}>返回登录</Button>
@@ -304,7 +306,7 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
         ) : mode === 'admin' ? (
           <form onSubmit={onAdminLogin}>
             <Field label="管理员密钥" required hint="平台管理员密钥可在部署配置中查看或重置。">
-              <Input type="password" value={adminKey} onChange={(event) => onAdminKeyChange(event.target.value)} placeholder="输入平台管理员密钥" />
+              <Input type="password" value={adminKey} onChange={(_, data) => onAdminKeyChange(data.value)} placeholder="输入平台管理员密钥" />
             </Field>
             <Button appearance="primary" type="submit" disabled={!adminKey.trim() || loading}>管理员登录</Button>
           </form>
@@ -312,7 +314,7 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
           <>
             <form onSubmit={onTenantLogin}>
               <Field label="用户名" required hint="使用注册时创建的租户账号。">
-                <Input value={username} maxLength={80} onChange={(event) => onUsernameChange(event.target.value)} placeholder="用户名" />
+                <Input value={username} maxLength={80} onChange={(_, data) => onUsernameChange(data.value)} placeholder="用户名" />
               </Field>
               <Field
                 label="密码"
@@ -321,7 +323,7 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
                 validationState={passwordTooShort ? 'error' : undefined}
                 validationMessage={passwordTooShort ? `密码至少需要 12 个字符，当前 ${password.length} 个。` : undefined}
               >
-                <Input type="password" value={password} maxLength={200} onChange={(event) => onPasswordChange(event.target.value)} placeholder="至少 12 个字符" />
+                <Input type="password" value={password} maxLength={200} onChange={(_, data) => onPasswordChange(data.value)} placeholder="至少 12 个字符" />
               </Field>
               <Button appearance="primary" type="submit" disabled={!username.trim() || password.length < 12 || passwordTooLong || loading}>登录</Button>
               {registrationAllowed && <Button appearance="subtle" type="button" onClick={() => setRegistering(true)}>注册新租户</Button>}
@@ -340,12 +342,6 @@ function LoginPage({ adminKey, onAdminKeyChange, username, password, onUsernameC
     </div>
   )
 }
-function ConnectionPanel_UNUSED_REMOVED({ value, onChange, onSubmit, username, password, onUsernameChange, onPasswordChange, onLogin, loading }: { value: string; onChange: (value: string) => void; onSubmit: (event: FormEvent) => void; username: string; password: string; onUsernameChange: (value: string) => void; onPasswordChange: (value: string) => void; onLogin: (event: FormEvent) => void; loading: boolean }) {
-  return <div className="connection-panel"><Key24Regular /><div><strong>连接管理服务</strong><span>平台管理员可使用密钥；租户成员使用账号登录。</span></div><form onSubmit={onSubmit}><input type="password" aria-label="管理员密钥" placeholder="输入平台管理员密钥" value={value} onChange={(event) => onChange(event.target.value)} /><button className="primary" disabled={!value.trim() || loading}>密钥连接</button></form><form onSubmit={onLogin}><input aria-label="用户名" placeholder="用户名" value={username} onChange={(event) => onUsernameChange(event.target.value)} /><input type="password" aria-label="密码" placeholder="密码" value={password} onChange={(event) => onPasswordChange(event.target.value)} /><button className="primary" disabled={!username.trim() || password.length < 12 || loading}>账号登录</button></form></div>
-}
-
-void ConnectionPanel_UNUSED_REMOVED
-
 function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
   const [mode, setMode] = useState<'register' | 'bind'>('register')
   const [username, setUsername] = useState('')
@@ -369,7 +365,7 @@ function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
       <div className="login-banner">
         <div className="login-banner-copy">
           <img src={centralControlIcon} alt="Class Widgets" />
-          <strong>Class Widgets</strong>
+          <Text weight="semibold">Class Widgets</Text>
           <span>完成账号设置</span>
           <p>这是该身份源首次登录，请选择账号处理方式。</p>
         </div>
@@ -380,8 +376,8 @@ function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
           <p>未找到对应的集控账号。</p>
         </div>
         <div className="segmented login-segment">
-          <button type="button" className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}>注册新账号</button>
-          <button type="button" className={mode === 'bind' ? 'selected' : ''} onClick={() => setMode('bind')}>绑定已有账号</button>
+          <Button type="button" className={mode === 'register' ? 'selected' : ''} onClick={() => setMode('register')}>注册新账号</Button>
+          <Button type="button" className={mode === 'bind' ? 'selected' : ''} onClick={() => setMode('bind')}>绑定已有账号</Button>
         </div>
         {error && <div className="notice error">{error}</div>}
         <form onSubmit={submit}>
@@ -392,7 +388,7 @@ function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
             validationState={username.length > 0 && !usernameValid ? 'error' : undefined}
             validationMessage={username.length > 0 && !usernameValid ? '只能包含字母、数字、下划线、点或连字符。' : undefined}
           >
-            <Input value={username} maxLength={80} onChange={(event) => setUsername(event.target.value)} placeholder={mode === 'bind' ? '输入已有用户名' : '设置用户名'} />
+            <Input value={username} maxLength={80} onChange={(_, data) => setUsername(data.value)} placeholder={mode === 'bind' ? '输入已有用户名' : '设置用户名'} />
           </Field>
           <Field
             label="密码"
@@ -401,11 +397,11 @@ function OAuthCompletionPage({ onComplete }: { onComplete: () => void }) {
             validationState={passwordTooShort || passwordTooLong ? 'error' : undefined}
             validationMessage={passwordTooShort ? `密码至少需要 12 个字符，当前 ${password.length} 个。` : passwordTooLong ? '密码不能超过 200 个字符。' : undefined}
           >
-            <Input type="password" value={password} maxLength={200} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'bind' ? '验证已有密码' : '至少 12 个字符'} />
+            <Input type="password" value={password} maxLength={200} onChange={(_, data) => setPassword(data.value)} placeholder={mode === 'bind' ? '验证已有密码' : '至少 12 个字符'} />
           </Field>
           {mode === 'register' && (
             <Field label="新建组织名称" required hint="1–120 个字符，例如：示范中学">
-              <Input value={organizationName} maxLength={120} onChange={(event) => setOrganizationName(event.target.value)} placeholder="例如：示范中学" />
+              <Input value={organizationName} maxLength={120} onChange={(_, data) => setOrganizationName(data.value)} placeholder="例如：示范中学" />
             </Field>
           )}
           <Button appearance="primary" type="submit" disabled={loading || !username.trim() || !usernameValid || password.length < 12 || passwordTooLong || (mode === 'register' && !organizationName.trim())}>
@@ -431,14 +427,14 @@ function TenantManagement({ organizations, groups, devices, onComplete }: { orga
   async function createTenant(event: FormEvent) { event.preventDefault(); try { await api.createOrganization(tenantName.trim()); setTenantName(''); onComplete('租户已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建租户失败', 'error') } }
   async function createMember(event: FormEvent) { event.preventDefault(); try { await api.createUser({ username: username.trim(), password, role, organization_ids: selected }); setUsername(''); setPassword(''); setSelected([]); onComplete('租户成员已创建'); load() } catch (error) { onComplete(error instanceof Error ? error.message : '创建成员失败', 'error') } }
   async function assign(user: AdminUser, ids: string[]) { try { await api.assignUserOrganizations(user.id, ids); onComplete(`“${user.username}”的租户范围已更新`); load() } catch (error) { onComplete(error instanceof Error ? error.message : '更新授权失败', 'error') } }
-  function organizationChecks(ids: string[], change: (value: string[]) => void) { return <div className="checks">{organizations.map((organization) => <label key={organization.id}><input type="checkbox" checked={ids.includes(organization.id)} onChange={(event) => change(event.target.checked ? [...ids, organization.id] : ids.filter((id) => id !== organization.id))} />{organization.name}</label>)}</div> }
-  return <div className="tenant-layout"><section className="form-section"><h2>总设置</h2><p>控制是否允许未登录用户在登录页注册新租户。</p><Checkbox label="允许公开注册" checked={allowRegistration} onChange={(_, data) => { const enabled = Boolean(data.checked); setAllowRegistration(enabled); void api.updateRegistrationSetting(enabled).then(() => onComplete(enabled ? '已允许公开注册' : '已关闭公开注册')).catch((error) => onComplete(error instanceof Error ? error.message : '保存设置失败', 'error')) }} /></section><section className="form-section"><h2>新建租户</h2><p>每个租户拥有独立的班级、设备、课表、策略、命令和日志。</p><form onSubmit={createTenant}><label>租户名称<input value={tenantName} onChange={(event) => setTenantName(event.target.value)} placeholder="例如：示范中学" /></label><button className="primary" disabled={!tenantName.trim()}><Add24Regular />创建租户</button></form></section><section className="form-section"><h2>新建成员</h2><p>创建后可在下方权限树中精细授权。</p><form onSubmit={createMember}><label>用户名<input value={username} onChange={(event) => setUsername(event.target.value)} /></label><label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 12 个字符" /></label><label>初始模板<select value={role} onChange={(event) => setRole(event.target.value)}><option value="viewer">只读</option><option value="operator">操作员</option><option value="admin">租户管理员</option></select></label><fieldset><legend>初始组织范围</legend>{organizationChecks(selected, setSelected)}</fieldset><button className="primary" disabled={!username.trim() || password.length < 12}><PeopleTeam24Regular />创建成员</button></form></section><section className="data-section tenant-members"><div className="section-heading"><h2>成员与租户授权</h2><span>{users.length} 名成员</span></div>{users.length === 0 && <div className="empty-command">暂无租户成员</div>}{users.map((user) => <TenantMemberRow key={user.id} user={user} organizations={organizations} onAssign={assign} />)}</section><section className="span-all"><AccessManagement organizations={organizations} groups={groups} devices={devices} users={users} onUsersChanged={load} onComplete={onComplete} /></section><section className="span-all"><OAuthProviderManagement onComplete={onComplete} /></section></div>
+  function organizationChecks(ids: string[], change: (value: string[]) => void) { return <div className="checks">{organizations.map((organization) => <Checkbox key={organization.id} label={organization.name} checked={ids.includes(organization.id)} onChange={(_, data) => change(data.checked ? [...ids, organization.id] : ids.filter((id) => id !== organization.id))} />)}</div> }
+  return <div className="tenant-layout"><section className="form-section"><h2>总设置</h2><p>控制是否允许未登录用户在登录页注册新租户。</p><Checkbox label="允许公开注册" checked={allowRegistration} onChange={(_, data) => { const enabled = Boolean(data.checked); setAllowRegistration(enabled); void api.updateRegistrationSetting(enabled).then(() => onComplete(enabled ? '已允许公开注册' : '已关闭公开注册')).catch((error) => onComplete(error instanceof Error ? error.message : '保存设置失败', 'error')) }} /></section><section className="form-section"><h2>新建租户</h2><p>每个租户拥有独立的班级、设备、课表、策略、命令和日志。</p><form onSubmit={createTenant}><Field label="租户名称" required hint="1-120 个字符，例如：示范中学"><Input value={tenantName} maxLength={120} onChange={(_, data) => setTenantName(data.value)} placeholder="例如：示范中学" /></Field><Button appearance="primary" type="submit" disabled={!tenantName.trim()}><Add24Regular />创建租户</Button></form></section><section className="form-section"><h2>新建成员</h2><p>创建后可在下方权限树中精细授权。</p><form onSubmit={createMember}><Field label="用户名" required hint="1-80 个字符，仅支持字母、数字、下划线、点与连字符。"><Input value={username} maxLength={80} onChange={(_, data) => setUsername(data.value)} /></Field><Field label="密码" required hint="12-200 个字符。"><Input type="password" maxLength={200} value={password} onChange={(_, data) => setPassword(data.value)} placeholder="至少 12 个字符" /></Field><Field label="初始模板" required hint="决定该成员创建时获得的默认权限范围。"><Dropdown selectedOptions={[role]} onOptionSelect={(_, data) => setRole(data.optionValue ?? "viewer")}><Option value="viewer">只读</Option><Option value="operator">操作员</Option><Option value="admin">租户管理员</Option></Dropdown></Field><Field label="初始组织范围" hint="留空表示稍后在权限树中授权。">{organizationChecks(selected, setSelected)}</Field><Button appearance="primary" type="submit" disabled={!username.trim() || password.length < 12}><PeopleTeam24Regular />创建成员</Button></form></section><section className="data-section tenant-members"><div className="section-heading"><h2>成员与租户授权</h2><span>{users.length} 名成员</span></div>{users.length === 0 && <div className="empty-command">暂无租户成员</div>}{users.map((user) => <TenantMemberRow key={user.id} user={user} organizations={organizations} onAssign={assign} />)}</section><section className="span-all"><AccessManagement organizations={organizations} groups={groups} devices={devices} users={users} onUsersChanged={load} onComplete={onComplete} /></section><section className="span-all"><OAuthProviderManagement onComplete={onComplete} /></section></div>
 }
 
 function TenantMemberRow({ user, organizations, onAssign }: { user: AdminUser; organizations: Organization[]; onAssign: (user: AdminUser, ids: string[]) => void }) {
   const [ids, setIds] = useState(user.organization_ids)
   useEffect(() => setIds(user.organization_ids), [user.organization_ids])
-  return <article className="tenant-member"><div><strong>{user.username}</strong><span>{user.role} · {user.disabled ? '已停用' : '启用'}</span></div><div className="checks">{organizations.map((organization) => <label key={organization.id}><input type="checkbox" checked={ids.includes(organization.id)} onChange={(event) => setIds(event.target.checked ? [...ids, organization.id] : ids.filter((id) => id !== organization.id))} />{organization.name}</label>)}</div><button className="primary" onClick={() => onAssign(user, ids)}>保存授权</button></article>
+  return <article className="tenant-member"><div><Text weight="semibold">{user.username}</Text><Text size={200}>{user.role} · {user.disabled ? '已停用' : '启用'}</Text></div><div className="checks">{organizations.map((organization) => <Checkbox key={organization.id} label={organization.name} checked={ids.includes(organization.id)} onChange={(_, data) => setIds(data.checked ? [...ids, organization.id] : ids.filter((id) => id !== organization.id))} />)}</div><Button appearance="primary" onClick={() => onAssign(user, ids)}>保存授权</Button></article>
 }
 
 function Overview({ devices, groups, organizations, onComplete }: { devices: Device[]; groups: Group[]; organizations: Organization[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
@@ -450,11 +446,11 @@ function Overview({ devices, groups, organizations, onComplete }: { devices: Dev
 function OrganizationSetup({ onComplete }: { onComplete: (message: string, tone?: 'success' | 'error') => void }) {
   const [name, setName] = useState('')
   async function submit(event: FormEvent) { event.preventDefault(); try { await api.createOrganization(name); onComplete('组织已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建失败', 'error') } }
-  return <form className="organization-setup" onSubmit={submit}><Organization24Regular /><div className="organization-setup-copy"><strong>创建首个组织</strong><span>组织是班级、课表和策略的管理边界。</span></div><div className="organization-setup-actions"><input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：示范中学" /><button className="primary" disabled={!name.trim()}><Add24Regular />创建</button></div></form>
+  return <form className="organization-setup" onSubmit={submit}><Organization24Regular /><div className="organization-setup-copy"><Text weight="semibold">创建首个组织</Text><Text size={200}>组织是班级、课表和策略的管理边界。</Text></div><div className="organization-setup-actions"><Input value={name} onChange={(_, data) => setName(data.value)} placeholder="例如：示范中学" /><Button appearance="primary" disabled={!name.trim()}><Add24Regular />创建</Button></div></form>
 }
 
 function Metric({ label, value, detail, tone }: { label: string; value: number; detail: string; tone?: string }) {
-  return <article className={`metric ${tone ?? ''}`}><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>
+  return <article className={`metric ${tone ?? ''}`}><Text size={200}>{label}</Text><Text className="metric-value" weight="semibold">{value}</Text><Text size={200}>{detail}</Text></article>
 }
 
 function DevicesView({ devices, groups, onComplete }: { devices: Device[]; groups: Group[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
@@ -465,11 +461,57 @@ function DevicesView({ devices, groups, onComplete }: { devices: Device[]; group
     if (!window.confirm(`确定删除设备“${deviceName}”？删除后该设备需要重新配对。`)) return
     try { await api.deleteDevice(deviceId); onComplete('设备已删除') } catch (error) { onComplete(error instanceof Error ? error.message : '删除设备失败', 'error') }
   }
-  return <><div className="toolbar"><input className="search" placeholder="搜索设备名称" value={query} onChange={(event) => setQuery(event.target.value)} /><span>{filtered.length} 台设备</span></div><DeviceTable devices={filtered} groups={groups} title="全部设备" onMove={move} onDelete={remove} /></>
+  return <><div className="toolbar"><Input className="search" contentBefore={<Search24Regular />} placeholder="搜索设备名称" value={query} onChange={(_, data) => setQuery(data.value)} /><span>{filtered.length} 台设备</span></div><DeviceTable devices={filtered} groups={groups} title="全部设备" onMove={move} onDelete={remove} /></>
 }
 
 function DeviceTable({ devices, groups, title, onMove, onDelete }: { devices: Device[]; groups: Group[]; title: string; onMove?: (deviceId: string, groupId: string) => void; onDelete?: (deviceId: string, deviceName: string) => void }) {
-  return <section className="data-section"><div className="section-heading"><h2>{title}</h2><span>{devices.length} 项</span></div><div className="table-wrap"><table><thead><tr><th>设备</th><th>状态</th><th>班级</th><th>当前课程</th><th>应用 / 插件</th><th>课表 / 策略</th><th>最后连接</th>{onDelete && <th>操作</th>}</tr></thead><tbody>{devices.length === 0 && <tr><td colSpan={onDelete ? 8 : 7} className="empty">暂无设备</td></tr>}{devices.map((device) => <tr key={device.id}><td><strong>{device.name}</strong><small>{device.id.slice(0, 8)}</small></td><td><span className={`state ${isOnline(device) ? 'online' : ''}`}><i />{device.revoked ? '已撤销' : isOnline(device) ? '在线' : '离线'}</span></td><td>{onMove ? <select aria-label={`调整 ${device.name} 的班级`} value={device.group_id} onChange={(event) => onMove(device.id, event.target.value)}>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select> : groups.find((group) => group.id === device.group_id)?.name ?? '未知'}</td><td>{device.current_title || device.current_status || '-'}</td><td>{device.app_version || '-'} / {device.plugin_version || '-'}</td><td>r{device.schedule_revision} / r{device.policy_revision}</td><td>{relativeTime(device.last_seen)}</td>{onDelete && <td><Button appearance="subtle" icon={<Delete24Regular />} aria-label={`删除设备 ${device.name}`} title="删除设备" onClick={() => onDelete(device.id, device.name)} /></td>}</tr>)}</tbody></table></div></section>
+  const DeviceBody = DataGridBody<Device>
+  const DeviceRow = DataGridRow<Device>
+  const columns = [
+    createTableColumn<Device>({
+      columnId: 'name',
+      renderHeaderCell: () => '设备',
+      renderCell: (device) => <TableCellLayout media={<Desktop24Regular />} description={device.id.slice(0, 8)}>{device.name}</TableCellLayout>,
+    }),
+    createTableColumn<Device>({
+      columnId: 'state',
+      renderHeaderCell: () => '状态',
+      renderCell: (device) => <Badge appearance="tint" color={device.revoked ? 'danger' : isOnline(device) ? 'success' : 'informative'}>{device.revoked ? '已撤销' : isOnline(device) ? '在线' : '离线'}</Badge>,
+    }),
+    createTableColumn<Device>({
+      columnId: 'group',
+      renderHeaderCell: () => '班级',
+      renderCell: (device) => onMove
+        ? <Dropdown aria-label={`调整 ${device.name} 的班级`} selectedOptions={[device.group_id]} onOptionSelect={(_, data) => data.optionValue && onMove(device.id, data.optionValue)} style={{ minWidth: 140 }}>{groups.map((group) => <Option key={group.id} value={group.id}>{group.name}</Option>)}</Dropdown>
+        : groups.find((group) => group.id === device.group_id)?.name ?? '未知',
+    }),
+    createTableColumn<Device>({
+      columnId: 'lesson',
+      renderHeaderCell: () => '当前课程',
+      renderCell: (device) => device.current_title || device.current_status || '-',
+    }),
+    createTableColumn<Device>({
+      columnId: 'version',
+      renderHeaderCell: () => '应用 / 插件',
+      renderCell: (device) => `${device.app_version || '-'} / ${device.plugin_version || '-'}`,
+    }),
+    createTableColumn<Device>({
+      columnId: 'revision',
+      renderHeaderCell: () => '课表 / 策略',
+      renderCell: (device) => `r${device.schedule_revision} / r${device.policy_revision}`,
+    }),
+    createTableColumn<Device>({
+      columnId: 'lastSeen',
+      renderHeaderCell: () => '最后连接',
+      renderCell: (device) => relativeTime(device.last_seen),
+    }),
+    ...(onDelete ? [createTableColumn<Device>({
+      columnId: 'actions',
+      renderHeaderCell: () => '操作',
+      renderCell: (device) => <Button appearance="subtle" icon={<Delete24Regular />} aria-label={`删除设备 ${device.name}`} title="删除设备" onClick={() => onDelete(device.id, device.name)} />,
+    })] : []),
+  ]
+  return <section className="data-section"><div className="section-heading"><h2>{title}</h2><span>{devices.length} 项</span></div><div className="table-wrap"><DataGrid items={devices} columns={columns} getRowId={(device) => device.id} focusMode="composite"><DataGridHeader><DataGridRow>{({ renderHeaderCell }) => <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>}</DataGridRow></DataGridHeader><DeviceBody>{({ item }) => <DeviceRow key={item.id}>{({ renderCell }) => <DataGridCell>{renderCell(item)}</DataGridCell>}</DeviceRow>}</DeviceBody></DataGrid></div>{devices.length === 0 && <div className="empty">暂无设备</div>}</section>
 }
 
 function GroupsView({ organizationId, groups, onComplete }: { organizationId: string; groups: Group[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
@@ -478,7 +520,7 @@ function GroupsView({ organizationId, groups, onComplete }: { organizationId: st
   const [pairing, setPairing] = useState<{ code: string; expires_at: string } | null>(null)
   async function createGroup(event: FormEvent) { event.preventDefault(); try { await api.createGroup(organizationId, name); setName(''); onComplete('班级已创建') } catch (error) { onComplete(error instanceof Error ? error.message : '创建失败', 'error') } }
   async function createCode() { try { const result = await api.createPairingCode(groupId, 15); setPairing(result); onComplete('一次性配对码已生成') } catch (error) { onComplete(error instanceof Error ? error.message : '生成失败', 'error') } }
-  return <div className="two-column"><section className="form-section"><h2>新建班级</h2><p>设备配对后将继承该班级的课表和策略。</p><form onSubmit={createGroup}><label>班级名称<input value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：高一教学楼" /></label><button className="primary" disabled={!organizationId || !name.trim()}><Add24Regular />创建班级</button></form></section><section className="form-section"><h2>设备配对</h2><p>配对码有效 15 分钟，使用一次后立即失效。</p><label>目标班级<select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">选择班级</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label><button className="primary" disabled={!groupId} onClick={() => void createCode()}><Key24Regular />生成配对码</button>{pairing && <div className="pairing-code"><strong>{pairing.code}</strong><span>有效至 {new Date(pairing.expires_at).toLocaleTimeString('zh-CN')}</span></div>}</section><section className="data-section span-all"><div className="section-heading"><h2>班级</h2><span>{groups.length} 项</span></div><div className="group-grid">{groups.map((group) => <article className="group-row" key={group.id}><Organization24Regular /><div><strong>{group.name}</strong><span>课表 r{group.schedule_revision} · 策略 r{group.policy_revision}</span></div></article>)}</div></section></div>
+  return <div className="two-column"><section className="form-section"><h2>新建班级</h2><p>设备配对后将继承该班级的课表和策略。</p><form onSubmit={createGroup}><Field label="班级名称" required hint="例如：高一教学楼。同一组织内建议保持唯一。"><Input value={name} onChange={(_, data) => setName(data.value)} placeholder="例如：高一教学楼" /></Field><Button appearance="primary" type="submit" disabled={!organizationId || !name.trim()}><Add24Regular />创建班级</Button></form></section><section className="form-section"><h2>设备配对</h2><p>配对码有效 15 分钟，使用一次后立即失效。</p><Field label="目标班级" required hint="配对成功后设备将继承该班级的课表与策略。"><Dropdown selectedOptions={[groupId]} onOptionSelect={(_, data) => setGroupId(data.optionValue ?? "")} placeholder="选择班级">{groups.map((group) => <Option key={group.id} value={group.id}>{group.name}</Option>)}</Dropdown></Field><Button appearance="primary" disabled={!groupId} onClick={() => void createCode()}><Key24Regular />生成配对码</Button>{pairing && <div className="pairing-code"><Text className="pairing-code-value" weight="semibold">{pairing.code}</Text><Text size={200}>有效至 {new Date(pairing.expires_at).toLocaleTimeString('zh-CN')}</Text></div>}</section><section className="data-section span-all"><div className="section-heading"><h2>班级</h2><span>{groups.length} 项</span></div><div className="group-grid">{groups.map((group) => <article className="group-row" key={group.id}><Organization24Regular /><div><Text weight="semibold">{group.name}</Text><span>课表 r{group.schedule_revision} · 策略 r{group.policy_revision}</span></div></article>)}</div></section></div>
 }
 
 function CommandsView({ organizationId, groups, devices, onComplete }: { organizationId: string; groups: Group[]; devices: Device[]; onComplete: (message: string, tone?: 'success' | 'error') => void }) {
@@ -504,12 +546,12 @@ function CommandsView({ organizationId, groups, devices, onComplete }: { organiz
   }, [organizationId])
   async function submit(event: FormEvent) { event.preventDefault(); try { const payload = type === 'show_notification' ? { title, message } : type === 'trigger_action' ? { action_id: actionId.trim() } : {}; const result = await api.createCommand({ type, [`${targetKind}_id`]: targetId, payload, expires_in_seconds: 300 }); onComplete(`命令 #${result.cursor} 已进入下发队列`) } catch (error) { onComplete(error instanceof Error ? error.message : '下发失败', 'error') } }
   const targets = targetKind === 'group' ? groups : devices
-  return <div className="command-layout"><section className="form-section command-form"><form onSubmit={submit}><div className="segmented"><button type="button" className={targetKind === 'group' ? 'selected' : ''} onClick={() => { setTargetKind('group'); setTargetId('') }}>班级</button><button type="button" className={targetKind === 'device' ? 'selected' : ''} onClick={() => { setTargetKind('device'); setTargetId('') }}>单台设备</button></div><label>目标<select value={targetId} onChange={(event) => setTargetId(event.target.value)}><option value="">选择目标</option>{targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}</select></label><label>操作<select value={type} onChange={(event) => setType(event.target.value)}><option value="refresh_status">立即刷新状态</option><option value="restart_app">重启 Class Widgets</option><option value="upload_diagnostics">上传诊断信息</option><option value="show_notification">显示通知</option><option value="trigger_action">触发 Action</option></select></label>{type === 'show_notification' && <><label>通知标题<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>通知内容<textarea value={message} onChange={(event) => setMessage(event.target.value)} /></label></>}{type === 'trigger_action' && <label>Action ID<input value={actionId} onChange={(event) => setActionId(event.target.value)} placeholder="例如：com.hpdnya.ea2c.convert_today" /></label>}<div className="form-actions"><span>命令将在设备下次 10 秒轮询时获取。</span><button className="primary" disabled={!targetId || (type === 'trigger_action' && !actionId.trim())}><Code24Regular />下发命令</button></div></form></section><CommandHistory commands={commands} groups={groups} devices={devices} /></div>
+  return <div className="command-layout"><section className="form-section command-form"><form onSubmit={submit}><div className="segmented"><Button type="button" className={targetKind === 'group' ? 'selected' : ''} onClick={() => { setTargetKind('group'); setTargetId('') }}>班级</Button><Button type="button" className={targetKind === 'device' ? 'selected' : ''} onClick={() => { setTargetKind('device'); setTargetId('') }}>单台设备</Button></div><Field label="目标" required hint={targetKind === 'group' ? '命令将下发给该班级下的全部设备。' : '命令仅下发给选中的单台设备。'}><Dropdown selectedOptions={[targetId]} onOptionSelect={(_, data) => setTargetId(data.optionValue ?? "")} placeholder="选择目标">{targets.map((target) => <Option key={target.id} value={target.id}>{target.name}</Option>)}</Dropdown></Field><Field label="操作" required hint="选择要下发给客户端的命令类型。"><Dropdown selectedOptions={[type]} onOptionSelect={(_, data) => setType(data.optionValue ?? "refresh_status")}><Option value="refresh_status">立即刷新状态</Option><Option value="restart_app">重启 Class Widgets</Option><Option value="upload_diagnostics">上传诊断信息</Option><Option value="show_notification">显示通知</Option><Option value="trigger_action">触发 Action</Option></Dropdown></Field>{type === 'show_notification' && <><Field label="通知标题" required hint="显示在客户端通知卡片顶部的标题。"><Input value={title} onChange={(_, data) => setTitle(data.value)} /></Field><Field label="通知内容" hint="支持多行文本。"><Textarea value={message} onChange={(_, data) => setMessage(data.value)} /></Field></>}{type === 'trigger_action' && <Field label="Action ID" required hint="由客户端插件注册的动作标识，例如 com.hpdnya.ea2c.convert_today。"><Input value={actionId} onChange={(_, data) => setActionId(data.value)} placeholder="例如：com.hpdnya.ea2c.convert_today" /></Field>}<div className="form-actions"><span>命令将在设备下次 10 秒轮询时获取。</span><Button appearance="primary" disabled={!targetId || (type === 'trigger_action' && !actionId.trim())}><Code24Regular />下发命令</Button></div></form></section><CommandHistory commands={commands} groups={groups} devices={devices} /></div>
 }
 
 function CommandHistory({ commands, groups, devices }: { commands: CommandRecord[]; groups: Group[]; devices: Device[] }) {
   const labels: Record<string, string> = { refresh_status: '刷新状态', restart_app: '重启应用', upload_diagnostics: '上传诊断', show_notification: '显示通知', trigger_action: '触发 Action' }
-  return <section className="data-section command-history"><div className="section-heading"><h2>最近命令</h2><span>{commands.length} 项</span></div><div className="command-list">{commands.length === 0 && <div className="empty-command">暂无命令</div>}{commands.map((command) => { const target = command.group_id ? groups.find((item) => item.id === command.group_id)?.name : devices.find((item) => item.id === command.device_id)?.name; const succeeded = command.acknowledgements.filter((item) => item.status === 'succeeded').length; const failed = command.acknowledgements.filter((item) => item.status === 'failed').length; return <article key={command.id} className="command-row"><Code24Regular /><div><strong>{labels[command.type] ?? command.type}</strong><span>{target ?? '未知目标'} · #{command.cursor}</span></div><div className="ack-summary"><span className="ack-success">{succeeded} 成功</span><span className={failed ? 'ack-failed' : ''}>{failed} 失败</span><small>{relativeTime(command.created_at)}</small></div></article> })}</div></section>
+  return <section className="data-section command-history"><div className="section-heading"><h2>最近命令</h2><span>{commands.length} 项</span></div><div className="command-list">{commands.length === 0 && <div className="empty-command">暂无命令</div>}{commands.map((command) => { const target = command.group_id ? groups.find((item) => item.id === command.group_id)?.name : devices.find((item) => item.id === command.device_id)?.name; const succeeded = command.acknowledgements.filter((item) => item.status === 'succeeded').length; const failed = command.acknowledgements.filter((item) => item.status === 'failed').length; return <article key={command.id} className="command-row"><Code24Regular /><div><Text weight="semibold">{labels[command.type] ?? command.type}</Text><Text size={200}>{target ?? '未知目标'} · #{command.cursor}</Text></div><div className="ack-summary"><span className="ack-success">{succeeded} 成功</span><span className={failed ? 'ack-failed' : ''}>{failed} 失败</span><Text size={200}>{relativeTime(command.created_at)}</Text></div></article> })}</div></section>
 }
 
 function LogsView({ organizationId }: { organizationId: string }) {
@@ -530,7 +572,7 @@ function LogsView({ organizationId }: { organizationId: string }) {
   }, [load, organizationId])
   async function open(id: string) { setDetail(await api.diagnostic(id)) }
   const logs = detail?.logs.filter((log) => `${log.level} ${log.message}`.toLowerCase().includes(filter.toLowerCase())) ?? []
-  return <div className="logs-layout"><section className="data-section report-list"><div className="section-heading"><h2>诊断报告</h2><span>{reports.length} 项</span></div>{reports.length === 0 && <div className="empty-command">暂无报告，可向设备下发“上传诊断”命令。</div>}{reports.map((report) => <button className={detail?.id === report.id ? 'report-row selected' : 'report-row'} key={report.id} onClick={() => void open(report.id)}><DocumentBulletList24Regular /><div><strong>{report.device_name}</strong><span>{report.log_count} 条日志 · {relativeTime(report.created_at)}</span></div></button>)}</section><section className="data-section log-viewer"><div className="section-heading"><h2>{detail ? `${detail.device_name} 的日志` : '日志详情'}</h2>{detail && <input className="search" placeholder="过滤级别或内容" value={filter} onChange={(event) => setFilter(event.target.value)} />}</div>{!detail && <div className="empty-command">选择一份诊断报告查看客户端动态上报日志。</div>}{detail?.last_error && <div className="notice error"><DismissCircle20Filled /><span>{detail.last_error}</span></div>}<div className="log-lines">{logs.map((log, index) => <div className={`log-line level-${log.level.toLowerCase()}`} key={`${log.time}-${index}`}><time>{log.time}</time><strong>{log.level}</strong><pre>{log.message}</pre></div>)}</div></section></div>
+  return <div className="logs-layout"><section className="data-section report-list"><div className="section-heading"><h2>诊断报告</h2><span>{reports.length} 项</span></div>{reports.length === 0 && <div className="empty-command">暂无报告，可向设备下发“上传诊断”命令。</div>}{reports.map((report) => <Button appearance="transparent" className={detail?.id === report.id ? 'report-row selected' : 'report-row'} key={report.id} onClick={() => void open(report.id)}><DocumentBulletList24Regular /><div><Text weight="semibold">{report.device_name}</Text><Text size={200}>{report.log_count} 条日志 · {relativeTime(report.created_at)}</Text></div></Button>)}</section><section className="data-section log-viewer"><div className="section-heading"><h2>{detail ? `${detail.device_name} 的日志` : '日志详情'}</h2>{detail && <Input className="search" contentBefore={<Filter24Regular />} placeholder="过滤级别或内容" value={filter} onChange={(_, data) => setFilter(data.value)} />}</div>{!detail && <div className="empty-command">选择一份诊断报告查看客户端动态上报日志。</div>}{detail?.last_error && <div className="notice error"><DismissCircle20Filled /><span>{detail.last_error}</span></div>}<div className="log-lines">{logs.map((log, index) => <div className={`log-line level-${log.level.toLowerCase()}`} key={`${log.time}-${index}`}><time>{log.time}</time><Text weight="semibold">{log.level}</Text><pre>{log.message}</pre></div>)}</div></section></div>
 }
 
 export default App
